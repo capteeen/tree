@@ -1,0 +1,238 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root,
+[data-theme='dark'] {
+  --bg: #1b1815;
+  --sky: #1b1815;
+  --panel: #24201c;
+  --panel2: #201c18;
+  --line: #3a322a;
+  --ink: #f4f4f2;
+  --muted: #a89c8c;
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --bg: #efe6d2;
+  --sky: #cfe3e6;
+  --panel: #f8f1e0;
+  --panel2: #e6dcc4;
+  --line: #c7b79a;
+  --ink: #1b1815;
+  --muted: #6e5f4c;
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: VT323, monospace;
+  font-size: 20px;
+  -webkit-font-smoothing: none;
+  min-height: 100dvh;
+}
+
+canvas,
+img,
+svg {
+  image-rendering: pixelated;
+}
+
+/* Notched pixel border box */
+.px-box {
+  background: var(--panel);
+  box-shadow:
+    0 -4px 0 0 var(--line),
+    0 4px 0 0 var(--line),
+    -4px 0 0 0 var(--line),
+    4px 0 0 0 var(--line);
+  margin: 4px;
+}
+
+.px-btn {
+  display: inline-block;
+  font-family: 'Press Start 2P', monospace;
+  background: #f5a623;
+  color: #1b1815;
+  padding: 8px 10px;
+  line-height: 1;
+  box-shadow:
+    0 -3px 0 0 #1b1815 inset,
+    0 3px 0 0 #ffd36b inset;
+  outline: 3px solid #1b1815;
+  outline-offset: -3px;
+  cursor: pointer;
+  transition: transform 0.05s;
+  white-space: nowrap;
+}
+.px-btn:hover {
+  filter: brightness(1.08);
+}
+.px-btn:active {
+  transform: translateY(2px);
+}
+.px-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.px-btn-ghost {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: none;
+  outline: 3px solid var(--line);
+}
+.px-btn-leaf {
+  background: #7bd389;
+  box-shadow:
+    0 -3px 0 0 #3f8a4c inset,
+    0 3px 0 0 #b2f0bb inset;
+}
+
+.px-input {
+  width: 100%;
+  background: var(--panel2);
+  border: 3px solid var(--line);
+  padding: 6px 8px;
+  font-size: 22px;
+  color: var(--ink);
+  outline: none;
+}
+.px-input:focus {
+  border-color: #f5a623;
+}
+
+.num-link {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.num-link:hover {
+  color: #f5a623;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #ff8fb1;
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.ticker-in {
+  animation: tickerIn 0.4s steps(6) both;
+}
+@keyframes tickerIn {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+.badge-pulse {
+  animation: badgePulse 2s steps(4) infinite;
+}
+@keyframes badgePulse {
+  50% {
+    box-shadow: 0 0 0 3px #ff8fb1;
+  }
+}
+
+.waterfall-fill {
+  animation: fill 0.9s steps(8) both;
+}
+@keyframes fill {
+  from {
+    width: 0;
+  }
+}
+
+/* a pixel of sap dropping down the waterfall row, then climbing back up */
+.drip {
+  position: absolute;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  background: #fff3c4;
+  animation: drip 2.4s steps(12) infinite;
+  opacity: 0.85;
+}
+@keyframes drip {
+  0% {
+    left: 0;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 8px);
+    opacity: 0;
+  }
+}
+
+.sprout-flash {
+  animation: sproutFlash 1s steps(5);
+}
+@keyframes sproutFlash {
+  0% {
+    background: #ff8fb1;
+  }
+}
+
+/* wallet adapter, pixelated */
+.wallet-wrap .wallet-adapter-button {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  height: auto;
+  padding: 8px 10px;
+  line-height: 1;
+  border-radius: 0;
+  background: #7bd389;
+  color: #1b1815;
+  outline: 3px solid #1b1815;
+  outline-offset: -3px;
+}
+.wallet-wrap .wallet-adapter-button-start-icon {
+  display: none;
+}
+.wallet-wrap .wallet-adapter-button:not([disabled]):hover {
+  background: #8fe8a0;
+}
+.wallet-adapter-modal-wrapper {
+  border-radius: 0 !important;
+  font-family: VT323, monospace;
+}
+.wallet-adapter-modal-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px !important;
+}
+.wallet-adapter-modal-list .wallet-adapter-button {
+  font-family: VT323, monospace;
+  font-size: 22px;
+}
+@media (max-width: 640px) {
+  .wallet-wrap .wallet-adapter-button {
+    font-size: 8px;
+    padding: 7px 6px;
+  }
+}
