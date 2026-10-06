@@ -1,12 +1,14 @@
 'use client';
 import Link from 'next/link';
-import { useWorld } from '@/lib/store';
+import { useStore, useWorld } from '@/lib/store';
 import Odometer from './Odometer';
 import { ev } from './Num';
 
 export default function Counters() {
   const { world, ready } = useWorld();
-  const s = world.stats;
+  // only real (mainnet) numbers are shown; the demo's made-up totals read 0
+  const live = useStore((st) => st.config?.mode === 'live');
+  const s = live ? world.stats : { trees: 0, coins: 0, deepest: 0, solClimbed: 0, deepestCa: undefined };
   const items = [
     { label: 'TREES PLANTED', value: String(s.trees), href: ev({ kind: 'sprout', roots: '1' }), color: 'text-leaf' },
     { label: 'TOTAL COINS', value: String(s.coins), href: ev({ kind: 'sprout' }), color: 'text-blossom' },
