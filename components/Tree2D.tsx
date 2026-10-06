@@ -43,6 +43,21 @@ export default function Tree2D({ rootCa, width = 120, height = 90, highlightCa, 
     const ctx = cv.getContext('2d')!;
     const p = PALETTES[season];
     ctx.clearRect(0, 0, width, height);
+    // banded pixel sky, a soft shadow under the canopy, then the island
+    const night = document.documentElement.dataset.theme !== 'light';
+    const bands = night ? ['#141119', '#181419', '#1b1815', '#1e1a16'] : ['#9fd0e6', '#aed9ea', '#bfe0ea', '#cfe6e0'];
+    bands.forEach((b, i) => {
+      ctx.fillStyle = b;
+      ctx.fillRect(0, Math.floor((height * i) / bands.length), width, Math.ceil(height / bands.length));
+    });
+    if (night) {
+      ctx.fillStyle = '#f4f4f2';
+      for (let i = 0; i < 14; i++) ctx.fillRect(hashStr(`tsx${rootCa}${i}`) % width, hashStr(`tsy${rootCa}${i}`) % Math.floor(height * 0.5), 1, 1);
+    }
+    ctx.fillStyle = night ? 'rgba(0,0,0,0.35)' : 'rgba(40,60,30,0.25)';
+    const sw = Math.max(20, width * 0.55);
+    ctx.fillRect(Math.round(width / 2 - sw / 2), height - 6, Math.round(sw), 2);
+    ctx.fillRect(Math.round(width / 2 - sw / 2) + 4, height - 7, Math.round(sw) - 8, 1);
     ctx.fillStyle = p.grass;
     ctx.fillRect(0, height - 4, width, 2);
     ctx.fillStyle = p.dirt;

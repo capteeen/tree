@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useStore } from '@/lib/store';
 import { onEvent } from '@/lib/bus';
@@ -23,6 +23,7 @@ const MAX_WOOD = 14000;
 const MAX_LEAF = 8000;
 const MAX_SAP = 1200;
 const MAX_DEBRIS = 600;
+const MAX_GROUND = 1600;
 const GROW_MS = 1000;
 const TRAIL = 7;
 
@@ -81,6 +82,28 @@ function pixelTexture(kind: 'bark' | 'leaf' | 'ground') {
   return t;
 }
 
+/** Pixel sky behind the transparent canvas: stars at night, drifting clouds by day. */
+function PixelSky() {
+  const stars = useMemo(() => Array.from({ length: 90 }, (_, i) => ({ x: (hashStr(`sx${i}`) % 1000) / 10, y: (hashStr(`sy${i}`) % 700) / 10, d: (hashStr(`sd${i}`) % 40) / 10, big: i % 9 === 0 })), []);
+  const clouds = useMemo(() => Array.from({ length: 5 }, (_, i) => ({ y: 6 + (hashStr(`cy${i}`) % 40), w: 70 + (hashStr(`cw${i}`) % 90), d: 60 + (hashStr(`cd${i}`) % 70), delay: -(hashStr(`cl${i}`) % 60) })), []);
+  return (
+    <div className="pixel-sky absolute inset-0" aria-hidden>
+      <div className="sky-stars absolute inset-0">
+        {stars.map((st, i) => (
+          <span key={i} className="star" style={{ left: `${st.x}%`, top: `${st.y}%`, animationDelay: `${st.d}s`, width: st.big ? 4 : 2, height: st.big ? 4 : 2 }} />
+        ))}
+      </div>
+      <div className="sky-clouds absolute inset-0">
+        {clouds.map((c, i) => (
+          <span key={i} className="cloud" style={{ top: `${c.y}%`, width: c.w, animationDuration: `${c.d}s`, animationDelay: `${c.delay}s` }}>
+            <i /><i /><i />
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
@@ -96,11 +119,14 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
     } catch {
       return;
     }
     renderer.setPixelRatio(1);
+    renderer.setClearColor(0x000000, 0);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.BasicShadowMap; // hard, blocky shadows: it's pixel art
     const canvas = renderer.domElement;
     canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;touch-action:none;';
     wrap.appendChild(canvas);
@@ -112,18 +138,61 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
 
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 500);
-    scene.add(new THREE.AmbientLight(0xffffff, 1.35));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.9);
-    sun.position.set(6, 12, 8);
+    // sky light from above, warm bounce from the ground, one hard sun that casts shadows
+    const hemi = new THREE.HemisphereLight(0xdfe9ff, 0x4a3520, 0.9);
+    scene.add(hemi);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+    scene.add(ambient);
+    const sun = new THREE.DirectionalLight(0xfff1d6, 2.4);
+    sun.position.set(14, 26, 10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.bias = -0.002;
+    sun.shadow.intensity = 0.5; // shade, not blackness
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 120;
     scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xffe0b0, 0.45);
+    scene.add(sun.target);
+    const fill = new THREE.DirectionalLight(0xffc890, 0.35);
     fill.position.set(-8, 3, -5);
     scene.add(fill);
+    // a soft light that rides with the camera, so whichever side faces you is never pitch black
+    const eye = new THREE.DirectionalLight(0xd9e4ff, 0.5);
+    scene.add(eye);
+    scene.add(eye.target);
+    const fitShadow = (h: number, r: number) => {
+      const e = Math.max(h, r) * 1.1 + 2;
+      const c = sun.shadow.camera;
+      c.left = -e;
+      c.right = e;
+      c.top = e;
+      c.bottom = -e;
+      c.updateProjectionMatrix();
+      sun.target.position.set(0, h * 0.4, 0);
+      sun.position.set(14, 26, 10).normalize().multiplyScalar(e * 2.2).add(sun.target.position);
+    };
 
     const box = new THREE.BoxGeometry(1, 1, 1);
     const tex = { bark: pixelTexture('bark'), leaf: pixelTexture('leaf'), ground: pixelTexture('ground') };
     const wood = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ map: tex.bark }), MAX_WOOD);
-    const leaves = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ map: tex.leaf }), MAX_LEAF);
+    const leafMat = new THREE.MeshLambertMaterial({ map: tex.leaf });
+    const wind = { value: 0 };
+    leafMat.onBeforeCompile = (sh) => {
+      sh.uniforms.uWind = wind;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uWind;')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vec3 ip = instanceMatrix[3].xyz;
+            float ph = ip.x * 1.7 + ip.z * 1.3 + ip.y * 0.5;
+            transformed.x += sin(uWind * 1.4 + ph) * 0.07 * (0.5 + 0.5 * sin(uWind * 0.3 + ip.y));
+            transformed.y += sin(uWind * 1.9 + ph * 1.3) * 0.04;
+          #endif`,
+        );
+    };
+    const leaves = new THREE.InstancedMesh(box, leafMat, MAX_LEAF);
     const sap = new THREE.InstancedMesh(
       box,
       new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false }),
@@ -132,7 +201,7 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
     sap.renderOrder = 10;
     const debris = new THREE.InstancedMesh(box, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }), MAX_DEBRIS);
     debris.renderOrder = 5;
-    const ground = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ map: tex.ground }), 400);
+    const ground = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ map: tex.ground }), MAX_GROUND);
     for (const m of [wood, leaves, sap, debris, ground]) {
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.setColorAt(0, new THREE.Color());
@@ -140,6 +209,50 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
       m.frustumCulled = false;
       scene.add(m);
     }
+    for (const m of [wood, leaves, ground]) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+    }
+
+    // ---------- pixel-art outline pass ----------
+    // The scene renders to a low-res target with a depth texture; a second pass
+    // darkens every pixel that sits in front of a neighbour (a silhouette edge),
+    // which gives each voxel cluster the dark outline 16-bit sprites have.
+    const canPost = renderer.capabilities.isWebGL2 || !!renderer.extensions.get('WEBGL_depth_texture');
+    const depthTex = new THREE.DepthTexture(1, 1);
+    const rt = new THREE.WebGLRenderTarget(1, 1, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      depthTexture: depthTex,
+      depthBuffer: true,
+    });
+    const postMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      uniforms: { tDiffuse: { value: rt.texture }, tDepth: { value: depthTex }, uTexel: { value: new THREE.Vector2(1, 1) }, uOutline: { value: new THREE.Color('#1a1410') } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `
+        uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform vec2 uTexel; uniform vec3 uOutline;
+        varying vec2 vUv;
+        float d(vec2 o){ return texture2D(tDepth, vUv + o * uTexel).x; }
+        void main(){
+          vec4 c = texture2D(tDiffuse, vUv);
+          float z = d(vec2(0.0));
+          // orthographic depth is linear: 0.0007 of the range is ~0.7 world units
+          float t = 0.0007;
+          float edge = 0.0;
+          edge += step(t, d(vec2( 1.0, 0.0)) - z);
+          edge += step(t, d(vec2(-1.0, 0.0)) - z);
+          edge += step(t, d(vec2(0.0,  1.0)) - z);
+          edge += step(t, d(vec2(0.0, -1.0)) - z);
+          float k = clamp(edge, 0.0, 1.0) * 0.62;
+          gl_FragColor = vec4(mix(c.rgb, uOutline, k), c.a);
+        }`,
+    });
+    const postScene = new THREE.Scene();
+    postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat));
+    const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
     const tmpM = new THREE.Matrix4();
     const tmpQ = new THREE.Quaternion();
@@ -169,6 +282,7 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
     const lit = new Map<Ca, number>();
     let litDirty = false;
     let structKey = '';
+    let groundR = -1;
     let dirty = true;
     let lastVersion = -1;
     let lastBuild = 0;
@@ -195,19 +309,49 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
 
     function buildGround() {
       const p = palette();
+      const grass = new THREE.Color(p.grass);
+      const grassD = grass.clone().offsetHSL(0, 0, -0.06);
+      const grassL = grass.clone().offsetHSL(0.01, 0.05, 0.05);
+      const dirt = new THREE.Color(p.dirt);
+      const dirtD = dirt.clone().offsetHSL(0, 0, -0.04);
+      const flowers = [p.fresh, p.old, '#f4f4f2', p.sap];
       let i = 0;
-      const R = Math.min(9, Math.max(4, Math.ceil(treeR * 0.55)));
+      const R = Math.min(11, Math.max(5, Math.ceil(treeR * 0.6)));
       for (let x = -R; x <= R; x++)
         for (let z = -R; z <= R; z++) {
-          const d = Math.hypot(x, z);
-          if (d > R + 0.3 || i >= 398) continue;
-          const h = hashStr(`g${x},${z}`) % 100;
-          const top = d < R - 1 || h < 50;
-          setInst(ground, i++, [x, -0.5 - (top ? 0 : 0.5), z], 1, top ? (h < 30 ? tmpC.set(p.grass).offsetHSL(0, 0, -0.04) : p.grass) : p.dirt);
+          const dist = Math.hypot(x, z);
+          if (dist > R + 0.4 || i >= MAX_GROUND - 4) continue;
+          const h = hashStr(`g${x},${z}`);
+          const rim = dist > R - 1.2;
+          // the island rises slightly toward the trunk and the rim crumbles away
+          const lift = rim ? -0.5 * ((h >>> 3) % 2) : (h % 7 === 0 ? 0.25 : 0) + (dist < 2.5 ? 0.25 : 0);
+          const top = rim && (h >>> 5) % 3 === 0 ? dirt : h % 9 === 0 ? grassD : h % 11 === 0 ? grassL : grass;
+          setInst(ground, i++, [x, -0.5 + lift, z], 1, top);
+          setInst(ground, i++, [x, -1.5 + lift, z], 1, (h >>> 7) % 3 === 0 ? dirtD : dirt);
+          if (rim && (h >>> 9) % 2 === 0) setInst(ground, i++, [x, -2.5 + lift, z], 1, dirtD);
+          if (rim) continue;
+          // tufts of grass, the odd flower, a rock
+          const r = (h >>> 11) % 100;
+          if (r < 9 && dist > 1.5) setInst(ground, i++, [x + 0.2, 0.2 + lift, z - 0.2], 0.3, grassL);
+          else if (r < 15 && dist > 1.5) {
+            setInst(ground, i++, [x - 0.15, 0.35 + lift, z + 0.15], 0.42, grassD);
+            setInst(ground, i++, [x + 0.25, 0.3 + lift, z - 0.1], 0.3, grass);
+          } else if (r < 19 && dist > 2) {
+            setInst(ground, i++, [x, 0.25 + lift, z], 0.22, grassD);
+            setInst(ground, i++, [x, 0.55 + lift, z], 0.3, flowers[(h >>> 17) % flowers.length]);
+          } else if (r < 21 && dist > 3) setInst(ground, i++, [x, 0.15 + lift, z], 0.55, '#6b6660');
         }
+      // root flare: a few chunky blocks hugging the base of the trunk
+      const rootN = nodes.get(rootCa);
+      const t0 = rootN ? rootN.thick : 1;
+      for (let k = 0; k < 6 && i < MAX_GROUND; k++) {
+        const a = (k / 6) * Math.PI * 2 + 0.4;
+        setInst(ground, i++, [Math.cos(a) * t0 * 0.75, 0.15 + (k % 2) * 0.2, Math.sin(a) * t0 * 0.75], t0 * (0.55 + (k % 3) * 0.1), tmpC.set(p.barkDark));
+      }
       ground.count = i;
       ground.instanceMatrix.needsUpdate = true;
       if (ground.instanceColor) ground.instanceColor.needsUpdate = true;
+      ground.computeBoundingSphere();
     }
 
     function rebuild(now: number) {
@@ -221,6 +365,7 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
         cam.target.set(0, treeH * 0.45, 0);
         cam.targetGoal.copy(cam.target);
       }
+      fitShadow(treeH, treeR);
       const p = palette();
       const barkA = new THREE.Color(p.bark);
       const barkB = new THREE.Color(p.barkDark);
@@ -244,7 +389,8 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
           if (t > eased) break;
           const pos = lerp3(n.start, n.end, t);
           const s = n.thick * (1 - 0.28 * t) * (gs !== undefined && g < 1 ? 0.6 + 0.4 * eased : 1);
-          let col = !c.alive ? deadC : (h + k) % 4 === 0 ? barkB : barkA;
+          const knot = (h + k * 7) % 11 === 0;
+          let col = !c.alive ? deadC : knot ? barkB.clone().offsetHSL(0, 0, -0.05) : (h + k) % 4 === 0 ? barkB : barkA.clone().offsetHSL(0, 0, (((h >>> (k % 20)) % 5) - 2) / 80);
           const dy = dying.get(c.ca);
           if (dy !== undefined) col = ((h + k) % 4 === 0 ? barkB : barkA).clone().lerp(deadC, Math.min(1, (now - dy) / DEATH_MS));
           setInst(wood, wi, [snap(pos[0]), snap(pos[1]), snap(pos[2])], s, col);
@@ -261,17 +407,20 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
           pop = pt < 1 ? Math.max(0.05, Math.sin(Math.min(1, pt) * Math.PI * 0.75) * 1.35) : 1;
         }
         const lc = new THREE.Color(leafColor(p, c.bornAt, now));
-        const count = 5 + (h % 5);
-        const R = Math.min(1.25, 0.4 + n.len * 0.16 + n.thick * 0.35);
+        const count = 9 + (h % 7) + Math.min(6, c.children.length * 2);
+        const R = Math.min(1.6, 0.5 + n.len * 0.18 + n.thick * 0.45);
         for (let j = 0; j < count && li < MAX_LEAF; j++) {
           const hj = hashStr(`${c.ca}:${j}`);
           const a = (hj % 360) * (Math.PI / 180);
-          const e = (((hj >>> 9) % 100) / 100) * 1.4 - 0.45;
-          const r = R * (0.45 + ((hj >>> 17) % 100) / 180);
-          const off: V3 = [Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r + 0.15, Math.sin(a) * Math.cos(e) * r];
+          const e = (((hj >>> 9) % 100) / 100) * 1.6 - 0.5;
+          const rr = ((hj >>> 17) % 100) / 100;
+          const r = R * (0.3 + rr * 0.7);
+          const off: V3 = [Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r * 0.85 + 0.2, Math.sin(a) * Math.cos(e) * r];
           const pos: V3 = [n.end[0] + off[0], n.end[1] + off[1], n.end[2] + off[2]];
-          const s = (0.36 + ((hj >>> 5) % 30) / 100) * pop * (1 - wither * 0.9);
-          const col = lc.clone().offsetHSL(0, 0, (((hj >>> 3) % 20) - 10) / 160).lerp(deadC, wither);
+          const s = (0.3 + ((hj >>> 5) % 40) / 100) * pop * (1 - wither * 0.9) * (rr < 0.4 ? 1.25 : 1);
+          // inner leaves sit in shade, outer and upper ones catch the light
+          const shade = (rr - 0.5) * 0.1 + Math.max(0, off[1]) * 0.05 + (((hj >>> 3) % 20) - 10) / 220;
+          const col = lc.clone().offsetHSL(0, rr < 0.4 ? -0.05 : 0.02, shade).lerp(deadC, wither);
           setInst(leaves, li, [snap(pos[0]), snap(pos[1]), snap(pos[2])], s, col);
           leafOwner[li++] = c.ca;
         }
@@ -283,7 +432,10 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
         if (m.instanceColor) m.instanceColor.needsUpdate = true;
         m.computeBoundingSphere();
       }
-      if (firstBuild) buildGround();
+      if (firstBuild || Math.ceil(treeR * 0.6) !== groundR) {
+        groundR = Math.ceil(treeR * 0.6);
+        buildGround();
+      }
       lastBuild = now;
       litDirty = true;
     }
@@ -403,7 +555,11 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
     const resize = () => {
       W = Math.max(1, wrap.clientWidth);
       H = Math.max(1, wrap.clientHeight);
-      renderer.setSize(Math.ceil(W / PIX), Math.ceil(H / PIX), false);
+      const rw = Math.ceil(W / PIX);
+      const rh = Math.ceil(H / PIX);
+      renderer.setSize(rw, rh, false);
+      rt.setSize(rw, rh);
+      (postMat.uniforms.uTexel.value as THREE.Vector2).set(1 / rw, 1 / rh);
       overlay.width = Math.ceil(W * dpr);
       overlay.height = Math.ceil(H * dpr);
     };
@@ -499,7 +655,6 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
     let raf = 0;
     let lastT = performance.now();
     let lastFocus: Ca | null | undefined;
-    const bgColor = new THREE.Color();
     let bgCheck = -1e9;
 
     const pointAlong = (pk: Packet, d: number): V3 => {
@@ -519,12 +674,17 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
       const wall = Date.now();
       const st = useStore.getState();
 
-      // theme background
-      if (now - bgCheck > 500) {
+      wind.value = now / 1000;
+      if (now - bgCheck > 1000) {
         bgCheck = now;
-        const bg = getComputedStyle(document.documentElement).getPropertyValue('--sky').trim() || '#1b1815';
-        bgColor.set(bg);
-        scene.background = bgColor;
+        // night: cool sky light and a dim sun; day: warm and bright
+        const night = document.documentElement.dataset.theme !== 'light';
+        hemi.color.set(night ? 0xb9c6e4 : 0xe4efff);
+        hemi.intensity = night ? 1.2 : 1.1;
+        sun.intensity = night ? 2.4 : 2.6;
+        sun.color.set(night ? 0xfff4de : 0xfff8ec);
+        ambient.intensity = night ? 0.75 : 0.5;
+        eye.intensity = night ? 0.65 : 0.3;
       }
 
       let growing = false;
@@ -611,6 +771,8 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
         cam.target.z + Math.cos(cam.az) * Math.cos(cam.el) * 100,
       );
       camera.lookAt(cam.target);
+      eye.position.copy(camera.position).add(new THREE.Vector3(0, 30, 0));
+      eye.target.position.copy(cam.target);
 
       // sap packets
       let si = 0;
@@ -677,7 +839,14 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
       debris.instanceMatrix.needsUpdate = true;
       if (debris.instanceColor) debris.instanceColor.needsUpdate = true;
 
-      renderer.render(scene, camera);
+      if (canPost) {
+        renderer.setRenderTarget(rt);
+        renderer.clear();
+        renderer.render(scene, camera);
+        renderer.setRenderTarget(null);
+        renderer.clear();
+        renderer.render(postScene, postCam);
+      } else renderer.render(scene, camera);
 
       // labels overlay
       octx.clearRect(0, 0, overlay.width, overlay.height);
@@ -727,6 +896,9 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
         (m.material as THREE.Material).dispose();
       }
       box.dispose();
+      rt.dispose();
+      depthTex.dispose();
+      postMat.dispose();
       Object.values(tex).forEach((t) => t.dispose());
       renderer.dispose();
       canvas.remove();
@@ -736,6 +908,7 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
 
   return (
     <div ref={wrapRef} className="absolute inset-0 overflow-hidden select-none">
+      <PixelSky />
       <div
         ref={tipRef}
         className="pointer-events-none absolute z-10 hidden whitespace-nowrap bg-black/80 px-2 py-1 font-pixel text-[9px] text-ink"

@@ -116,8 +116,13 @@ Everything marked `TODO(phase2)` in the code is a hook point for this.
 
 ## Performance notes
 
-* The 3D tree uses three `InstancedMesh`es (wood, leaves, sap) plus one for particles, so draw calls stay
-  constant no matter how many coins there are. Trees are capped at 300 coins.
+* The 3D tree uses three `InstancedMesh`es (wood, leaves, sap) plus one each for particles and the
+  ground, so draw calls stay constant no matter how many coins there are. Trees are capped at 300 coins.
+* Rendering: a hard-shadow sun (`BasicShadowMap`, blocky on purpose), hemisphere + camera-following fill
+  lights so the visible side is never black, a vertex-shader wind sway on the leaves, and a depth-based
+  outline pass (the scene renders to a low-res target with a depth texture; a full-screen pass darkens
+  silhouette edges, the 16-bit sprite outline). The canvas is transparent over a CSS pixel sky (stars at
+  night, drifting clouds by day).
 * It renders at 1/2 or 1/3 resolution and scales up with `image-rendering: pixelated`. That gives the
   pixel look and keeps fill-rate low on phones.
 * Instance buffers are rebuilt at most every 0.7 s (every frame only while a branch is growing), and

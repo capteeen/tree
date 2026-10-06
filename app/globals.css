@@ -269,3 +269,73 @@ svg {
     padding: 7px 6px;
   }
 }
+
+/* ---------- pixel sky behind the 3D tree ---------- */
+.pixel-sky {
+  background: linear-gradient(to bottom, #0f0d14 0%, #1b1815 55%, #241d17 100%);
+  overflow: hidden;
+}
+[data-theme='light'] .pixel-sky {
+  background: linear-gradient(to bottom, #8fc6e3 0%, #bfe0ea 60%, #dcebd3 100%);
+}
+.star {
+  position: absolute;
+  background: #f4f4f2;
+  animation: twinkle 3s steps(2) infinite;
+}
+@keyframes twinkle {
+  50% {
+    opacity: 0.25;
+  }
+}
+[data-theme='light'] .sky-stars {
+  display: none;
+}
+.sky-clouds {
+  display: none;
+}
+[data-theme='light'] .sky-clouds {
+  display: block;
+}
+.cloud {
+  position: absolute;
+  left: -30%;
+  height: 24px;
+  animation: drift linear infinite;
+  opacity: 0.9;
+}
+.cloud i {
+  position: absolute;
+  bottom: 0;
+  background: #f8fbff;
+  box-shadow: 0 4px 0 0 #dbe7f0;
+}
+.cloud i:nth-child(1) {
+  left: 0;
+  width: 100%;
+  height: 12px;
+}
+.cloud i:nth-child(2) {
+  left: 20%;
+  width: 45%;
+  height: 24px;
+}
+.cloud i:nth-child(3) {
+  left: 55%;
+  width: 30%;
+  height: 18px;
+}
+@keyframes drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(160vw);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star,
+  .cloud {
+    animation: none;
+  }
+}
