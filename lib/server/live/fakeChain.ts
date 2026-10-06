@@ -177,10 +177,6 @@ export class FakeChain implements Chain {
     return this.txs.get(signature)?.deltas.get(account.toBase58()) ?? 0;
   }
 
-  async buildPaymentTx() {
-    return '';
-  }
-
   /** Fake-chain stand-in for the user's wallet paying a launch. */
   pay(to: PublicKey, l: number) {
     this.add(to.toBase58(), l);

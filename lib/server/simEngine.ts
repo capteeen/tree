@@ -98,6 +98,12 @@ export class SimEngine implements Engine {
     return this.pending.get(id)?.status ?? null;
   }
 
+  async cancelPlant(id: string) {
+    const p = this.pending.get(id);
+    if (p && p.status.state === 'awaiting_payment') p.status = { id, state: 'expired', error: 'cancelled' };
+    return p?.status ?? null;
+  }
+
   claimChallenge(wallet: string) {
     return `TREE claim for ${wallet}`;
   }

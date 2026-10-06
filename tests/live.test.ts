@@ -146,6 +146,30 @@ describe('live engine on the fake chain', () => {
     await solvent(store, chain);
   });
 
+  it('a cancelled payment frees the slot; a paid one cannot be cancelled', async () => {
+    const { engine, chain } = setup();
+    const owner = Keypair.generate().publicKey.toBase58();
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i++) ids.push((await engine.preparePlant({ name: 'Oak Tree', ticker: 'OAK', image: 'sprite:1', owner, devBuy: 0 })).id);
+    await expect(engine.preparePlant({ name: 'Oak Tree', ticker: 'OAK', image: 'sprite:1', owner, devBuy: 0 })).rejects.toThrow(/waiting for payment/);
+    expect((await engine.cancelPlant(ids[0]))!.state).toBe('expired');
+    await engine.preparePlant({ name: 'Oak Tree', ticker: 'OAK', image: 'sprite:1', owner, devBuy: 0 }); // slot is free again
+
+    // money already arrived: cancel must not abandon it
+    const paid = await engine.preparePlant({ name: 'Paid Oak', ticker: 'PAID', image: 'sprite:1', owner: Keypair.generate().publicKey.toBase58(), devBuy: 0 });
+    chain.pay(new PublicKey(paid.payTo!), paid.lamports!);
+    expect((await engine.cancelPlant(paid.id))!.state).toBe('awaiting_payment');
+    for (let i = 0; i < 4; i++) await engine.processLaunches();
+    expect(engine.plantStatus(paid.id)!.state).toBe('done');
+  });
+
+  it('measures what a launch really cost', async () => {
+    const { engine, chain } = setup();
+    await plant(engine, Keypair.generate().publicKey.toBase58(), 0.3);
+    // rent + one create transaction fee; the dev buy is not counted
+    expect(engine.config().observedLaunchCost! * SOL).toBe(FAKE_CREATE_RENT + chain.txFee);
+  });
+
   it('a lost transaction changes nothing and is retried', async () => {
     const { engine, chain, store, advance } = setup();
     const { status } = await plant(engine, Keypair.generate().publicKey.toBase58());

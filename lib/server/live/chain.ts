@@ -58,7 +58,4 @@ export interface Chain {
   status(signature: string, lastValidBlockHeight: number): Promise<TxOutcome>;
   /** Lamport change of `account` caused by a landed transaction (post - pre). */
   balanceDelta(signature: string, account: PublicKey): Promise<number>;
-
-  /** Unsigned transfer from a user's wallet, for the browser wallet to sign. Base64. */
-  buildPaymentTx(p: { from: PublicKey; to: PublicKey; lamports: number; memo: string }): Promise<string>;
 }

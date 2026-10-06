@@ -25,10 +25,12 @@ export interface PlantRequest {
 export interface PreparedPlant {
   id: string;
   mode: Mode;
-  /** Base64 unsigned transaction for the wallet to sign and send (live). */
-  tx?: string;
-  /** The new root's vault: the address being paid. */
+  /** The new root's vault: the address the wallet pays (live). */
   payTo?: string;
+  /** Exact lamports to send to payTo. The browser builds the transfer itself, with a fresh blockhash. */
+  lamports?: number;
+  /** Memo to attach, so the payment is recognisable on an explorer. */
+  memo?: string;
   /** SOL */
   total: number;
   breakdown: { launchCost: number; reserve: number; devBuy: number; networkFee: number };
@@ -52,6 +54,8 @@ export interface PublicConfig {
   minClaim: number;
   /** live: claims need a signed message from the wallet */
   claimNeedsSignature: boolean;
+  /** SOL a pump.fun create actually cost on the last launch (rent + fees), once measured. */
+  observedLaunchCost?: number;
 }
 
 export interface Engine {
@@ -61,6 +65,8 @@ export interface Engine {
   preparePlant(r: PlantRequest): Promise<PreparedPlant>;
   confirmPlant(id: string, signature?: string): Promise<PlantStatus>;
   plantStatus(id: string): PlantStatus | null;
+  /** The wallet declined to pay: release the pending slot (only if nothing was paid). */
+  cancelPlant(id: string): Promise<PlantStatus | null>;
   claimChallenge(wallet: string): string;
   claim(wallet: string, message: string, signature?: string): Promise<{ amount: number; signatures: string[] }>;
   /** Self-hosted images / metadata (live engines only). */

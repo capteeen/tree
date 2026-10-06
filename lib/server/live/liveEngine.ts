@@ -122,6 +122,7 @@ export class LiveEngine implements Engine {
       threshold: sol(this.threshold + this.cfg.childDevBuy),
       minClaim: sol(this.cfg.claimMin),
       claimNeedsSignature: this.mode === 'live',
+      observedLaunchCost: this.s.getMeta('observed_launch_cost') ? sol(Number(this.s.getMeta('observed_launch_cost'))) : undefined,
     };
   }
 
@@ -290,6 +291,7 @@ export class LiveEngine implements Engine {
     // anything that needs the chain is fetched before the DB transaction
     let delta = 0;
     if (kind === 'collect') delta = await this.chain.balanceDelta(sig, new PublicKey(String(p.vault)));
+    if (kind === 'create') await this.measureLaunchCost(String(p.launchId), sig).catch(() => {});
     const after: (() => void)[] = [];
     this.s.tx(() => {
       if (!this.s.intentOpen(id)) return; // already settled elsewhere: never apply twice
@@ -319,6 +321,23 @@ export class LiveEngine implements Engine {
       }
     });
     after.forEach((f) => f());
+  }
+
+  /**
+   * What pump.fun's create really cost (rent for the mint, curve, metadata and
+   * token accounts, plus fees), read from the confirmed transaction. Stored and
+   * shown in /api/config; a warning is logged when it exceeds LAUNCH_COST_SOL,
+   * because children are funded with launchCost + reserve.
+   */
+  private async measureLaunchCost(launchId: string, sig: string) {
+    const l = this.s.launch(launchId);
+    if (!l) return;
+    const delta = await this.chain.balanceDelta(sig, new PublicKey(l.vault_pubkey));
+    const cost = -delta - l.dev_buy; // dev buy spend is the user's purchase, not launch cost
+    if (cost <= 0) return;
+    this.s.setMeta('observed_launch_cost', String(cost));
+    if (cost > this.cfg.launchCost)
+      this.log(`launch cost ${sol(cost)} SOL is above LAUNCH_COST_SOL=${sol(this.cfg.launchCost)}: raise it so children are funded correctly`);
   }
 
   // ---------------------------------------------------------------- ledger appliers (inside DB tx)
@@ -500,13 +519,13 @@ export class LiveEngine implements Engine {
       created_at: now,
       updated_at: now,
     });
-    const tx = await this.chain.buildPaymentTx({ from: new PublicKey(r.owner), to: vault.publicKey, lamports: required, memo: `tree:plant:${id}` });
     const extra = required - this.cfg.launchCost - this.cfg.reserve - devBuy;
     return {
       id,
       mode: this.mode,
-      tx: tx || undefined,
       payTo: vault.publicKey.toBase58(),
+      lamports: required,
+      memo: `tree:plant:${id}`,
       total: sol(required),
       breakdown: { launchCost: sol(this.cfg.launchCost), reserve: sol(this.cfg.reserve), devBuy: sol(devBuy), networkFee: sol(extra) },
     };
@@ -532,6 +551,17 @@ export class LiveEngine implements Engine {
     }
     void this.processLaunches();
     return this.plantStatus(id)!;
+  }
+
+  async cancelPlant(id: string): Promise<PlantStatus | null> {
+    const l = this.s.launch(id);
+    if (!l || l.kind !== 'root') return null;
+    if (l.state === 'awaiting_payment') {
+      // only release the slot if nothing arrived; a late payment still launches (or is refunded)
+      const bal = await this.chain.balance(new PublicKey(l.vault_pubkey));
+      if (bal === 0) this.s.updateLaunch(id, { state: 'expired', error: 'cancelled' });
+    }
+    return this.plantStatus(id);
   }
 
   plantStatus(id: string): PlantStatus | null {

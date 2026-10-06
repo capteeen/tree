@@ -2,8 +2,11 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { Transaction } from '@solana/web3.js';
-import { plantFlow, type PlantStep } from '@/lib/client/api';
+import { PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
+import { Buffer } from 'buffer';
+import { pendingLaunch, plantFlow, waitForLaunch, type PlantStep, type PreparedPlant } from '@/lib/client/api';
+
+const MEMO_PROGRAM = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
 import WalletGate from '@/components/WalletGate';
 import { WalletMultiButton } from '@/components/WalletProviders';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
@@ -12,7 +15,7 @@ import { LAUNCH_COST, LAUNCH_THRESHOLD, ROOT_RESERVE } from '@/lib/sim';
 
 const STEPS: { k: PlantStep; label: string }[] = [
   { k: 'preparing', label: 'Uploading image and metadata' },
-  { k: 'sign', label: 'Approve the payment in your wallet' },
+  { k: 'sign', label: 'Approve the payment in your wallet' }, // label gets the exact amount once known
   { k: 'paying', label: 'Waiting for your payment to land' },
   { k: 'launching', label: 'Launching on pump.fun' },
 ];
@@ -47,7 +50,14 @@ function PlantForm() {
   const { connection } = useConnection();
   const mode = useStore((s) => s.mode);
   const config = useStore((s) => s.config);
-  const [step, setStep] = useState<PlantStep | null>(null);
+  const [step, setStepState] = useState<PlantStep | null>(null);
+  const [prepared, setPrepared] = useState<PreparedPlant | null>(null);
+  const [resuming, setResuming] = useState<string | null>(null);
+  const setStep = (st: PlantStep | null, p?: PreparedPlant) => {
+    setStepState(st);
+    if (p) setPrepared(p);
+  };
+
   const { setVisible } = useWalletModal();
   const ready = useStore((s) => s.ready);
   const [name, setName] = useState('');
@@ -59,6 +69,27 @@ function PlantForm() {
   const [devBuy, setDevBuy] = useState('0.1');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  // a launch that was in progress when the page was closed or refreshed: pick it back up
+  useEffect(() => {
+    if (!ready || mode === 'local') return;
+    const p = pendingLaunch();
+    if (!p) return;
+    setBusy(true);
+    setResuming(p.ticker);
+    waitForLaunch(p.id, setStep)
+      .then(async (ca) => {
+        await useStore.getState().waitForCoin(ca);
+        router.push(`/tree/${ca}`);
+      })
+      .catch((e) => {
+        setErr(e instanceof Error ? e.message : 'launch failed');
+        setBusy(false);
+        setStep(null);
+        setResuming(null);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, mode]);
 
   const dev = Math.max(0, Number(devBuy) || 0);
   const launchCost = config?.launchCost ?? LAUNCH_COST;
@@ -91,8 +122,13 @@ function PlantForm() {
       else {
         ca = await plantFlow(input, {
           onStep: setStep,
-          sendTx: async (b64) => {
-            const tx = Transaction.from(Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)));
+          balance: () => connection.getBalance(publicKey, 'confirmed'),
+          // built here, at approval time, so the blockhash is always fresh
+          pay: async ({ to, lamports, memo }) => {
+            const tx = new Transaction().add(
+              SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: new PublicKey(to), lamports }),
+              new TransactionInstruction({ programId: MEMO_PROGRAM, keys: [], data: Buffer.from(memo, 'utf8') }),
+            );
             return sendTransaction(tx, connection);
           },
         });
@@ -101,7 +137,13 @@ function PlantForm() {
       router.push(`/tree/${ca}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'launch failed';
-      setErr(/reject|declin|cancel/i.test(msg) ? 'You cancelled the payment. Nothing was charged.' : msg);
+      setErr(
+        /reject|declin|cancel/i.test(msg)
+          ? 'You cancelled the payment. Nothing was charged.'
+          : /insufficient|debit an account/i.test(msg)
+            ? 'Not enough SOL in this wallet for the launch. Lower the dev buy or top up.'
+            : msg,
+      );
       setBusy(false);
       setStep(null);
     }
@@ -206,6 +248,9 @@ function PlantForm() {
             <WalletMultiButton>CONNECT WALLET TO PLANT</WalletMultiButton>
           </div>
         )}
+        {resuming && (
+          <p className="mt-3 text-lg text-sap">Picking up your launch of ${resuming}…</p>
+        )}
         {busy && step && (
           <ol className="mt-3 space-y-1 text-lg">
             {STEPS.filter((x) => realMoney || x.k !== 'sign').map((x) => {
@@ -213,7 +258,8 @@ function PlantForm() {
               const i = STEPS.findIndex((y) => y.k === x.k);
               return (
                 <li key={x.k} className={i < order ? 'text-leaf' : i === order ? 'text-sap' : 'text-muted'}>
-                  {i < order ? '✓' : i === order ? '▸' : '·'} {x.label}
+                  {i < order ? '✓' : i === order ? '▸' : '·'}{' '}
+                  {x.k === 'sign' && prepared ? `Approve exactly ${fmtSol(prepared.total)} SOL in your wallet` : x.label}
                 </li>
               );
             })}

@@ -4,7 +4,6 @@ import {
   Connection,
   PublicKey,
   SystemProgram,
-  Transaction,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
@@ -256,14 +255,4 @@ export class SolanaChain implements Chain {
     throw new Error(`transaction ${signature} not found`);
   }
 
-  async buildPaymentTx(p: { from: PublicKey; to: PublicKey; lamports: number; memo: string }) {
-    const { blockhash, lastValidBlockHeight } = await this.conn.getLatestBlockhash('confirmed');
-    const tx = new Transaction({ feePayer: p.from, blockhash, lastValidBlockHeight });
-    tx.add(
-      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.o.priorityMicroLamports }),
-      SystemProgram.transfer({ fromPubkey: p.from, toPubkey: p.to, lamports: p.lamports }),
-      memoIx(p.memo),
-    );
-    return tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
-  }
 }
