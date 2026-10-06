@@ -3,13 +3,15 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
+import WalletGate from '@/components/WalletGate';
+import { WalletMultiButton } from '@/components/WalletProviders';
 import { useWorld, useStore } from '@/lib/store';
 import { fmtSol, shortCa } from '@/lib/format';
 import Loading from '@/components/Loading';
 import CoinSprite from '@/components/CoinSprite';
 import Num, { ev } from '@/components/Num';
 
-export default function MePage() {
+function Me() {
   const { publicKey } = useWallet();
   const { setVisible } = useWalletModal();
   const { world, version, ready } = useWorld();
@@ -52,12 +54,17 @@ export default function MePage() {
 
   return (
     <div className="mx-auto max-w-5xl px-3 py-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="font-pixel text-sm text-leaf">YOUR GROVE</h1>
-        <span className="text-lg text-muted">
-          {demo && !publicKey ? 'sample planter ' : ''}
-          {shortCa(wallet)}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-lg text-muted">
+            {demo && !publicKey ? 'sample planter ' : ''}
+            {shortCa(wallet)}
+          </span>
+          <div className="wallet-wrap">
+            <WalletMultiButton />
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -85,9 +92,13 @@ export default function MePage() {
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
           disabled={claimable <= 0 || !publicKey}
-          onClick={() => {
-            const amt = useStore.getState().claim(wallet);
-            setToast(`Claimed ${fmtSol(amt)} SOL (simulated, no transaction sent).`);
+          onClick={async () => {
+            try {
+              const amt = await useStore.getState().claim(wallet);
+              setToast(`Claimed ${fmtSol(amt)} SOL (simulated, no transaction sent).`);
+            } catch {
+              setToast('Claim failed. Try again.');
+            }
           }}
           className="px-btn text-[10px]"
         >
@@ -100,12 +111,51 @@ export default function MePage() {
         </Link>
       </div>
 
+      {mine.length > 0 && (
+        <section className="mt-6 grid gap-3 sm:grid-cols-2">
+          {Object.values(
+            mine.reduce<Record<string, { root: string; coins: typeof mine }>>((acc, c) => {
+              (acc[c.rootCa] ??= { root: c.rootCa, coins: [] }).coins.push(c);
+              return acc;
+            }, {}),
+          ).map(({ root, coins }) => {
+            const tree = world.trees[root];
+            const rootCoin = world.coins[root];
+            const deepestMine = Math.max(...coins.map((c) => c.depth));
+            return (
+              <div key={root} className="px-box p-3">
+                <div className="mb-1 flex items-baseline justify-between gap-2">
+                  <Link href={`/tree/${root}`} className="font-pixel text-[10px] text-leaf hover:text-sap">
+                    {rootCoin?.ticker} TREE
+                  </Link>
+                  <span className="text-lg text-muted">
+                    {coins.length} of {tree?.coins ?? '?'} coins are yours
+                  </span>
+                </div>
+                <div className="flex gap-3 text-lg leading-tight">
+                  <span>
+                    your deepest: <b className="font-pixel text-[9px]">D{deepestMine}</b>
+                    {tree && deepestMine === tree.maxDepth && <span className="text-blossom"> (the deepest in the tree)</span>}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
       <section className="px-box mt-6 p-3">
         <h2 className="mb-2 font-pixel text-[9px] text-muted">YOUR COINS</h2>
         {!mine.length && (
-          <p className="text-xl text-muted">
-            Nothing yet. <Link href="/plant" className="underline hover:text-sap">Plant a root</Link> and every coin it grows is yours.
-          </p>
+          <div className="text-xl text-muted">
+            <p>
+              Nothing yet. <Link href="/plant" className="underline hover:text-sap">Plant a root</Link> and every coin it grows is yours.
+            </p>
+            <p className="mt-1 text-lg">
+              Coins you&apos;ve traded will show up here in Phase 2, once trades are read from chain.{' '}
+              <Link href="/forest" className="underline hover:text-sap">Browse the forest</Link> meanwhile.
+            </p>
+          </div>
         )}
         <ul className="divide-y-2 divide-[var(--line)]">
           {mine.map((c) => (
@@ -122,5 +172,13 @@ export default function MePage() {
         </ul>
       </section>
     </div>
+  );
+}
+
+export default function MePage() {
+  return (
+    <WalletGate>
+      <Me />
+    </WalletGate>
   );
 }

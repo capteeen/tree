@@ -14,15 +14,48 @@
   color-scheme: dark;
 }
 
+/* Day mode: parchment panels, a pale sky behind the tree, ink text. */
 [data-theme='light'] {
-  --bg: #efe6d2;
-  --sky: #cfe3e6;
-  --panel: #f8f1e0;
-  --panel2: #e6dcc4;
-  --line: #c7b79a;
-  --ink: #1b1815;
-  --muted: #6e5f4c;
+  --bg: #f1e9d6;
+  --sky: #bfe0ea;
+  --panel: #faf4e4;
+  --panel2: #e9e0c8;
+  --line: #b9a789;
+  --ink: #221c16;
+  --muted: #6b5b47;
   color-scheme: light;
+}
+[data-theme='light'] .px-btn-ghost {
+  outline-color: #8b7a5c;
+}
+[data-theme='light'] .text-muted {
+  color: #6b5b47;
+}
+[data-theme='light'] .bg-\[\#1b1815\]\/80,
+[data-theme='light'] .bg-\[\#1b1815\]\/85,
+[data-theme='light'] .bg-\[\#1b1815\]\/90 {
+  background: rgba(250, 244, 228, 0.92);
+  color: #221c16;
+}
+[data-theme='light'] .bg-\[\#1b1815\]\/80 .text-\[\#f4f4f2\],
+[data-theme='light'] .bg-\[\#1b1815\]\/90 .text-\[\#f4f4f2\],
+[data-theme='light'] .text-\[\#f4f4f2\] {
+  color: #221c16;
+}
+[data-theme='light'] .text-\[\#a89c8c\] {
+  color: #6b5b47;
+}
+[data-theme='light'] .text-leaf {
+  color: #2f8a44;
+}
+[data-theme='light'] .text-sap {
+  color: #b86f00;
+}
+[data-theme='light'] .text-blossom {
+  color: #c94a78;
+}
+[data-theme='light'] .bg-sap {
+  background: #f0a31f;
 }
 
 html,

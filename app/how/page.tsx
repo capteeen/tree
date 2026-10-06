@@ -4,6 +4,7 @@ import Steps from '@/components/Steps';
 import { ancestorFractions } from '@/lib/fees';
 import { pct } from '@/lib/format';
 import { LAUNCH_COST, LAUNCH_THRESHOLD, ROOT_RESERVE } from '@/lib/sim';
+import { MAX_CLIMB_HOPS } from '@/lib/fees';
 
 export const metadata = { title: 'How it works · TREE' };
 
@@ -120,6 +121,19 @@ export default function HowPage() {
         </p>
         <ClimbDiagram />
         <DecayTable />
+        <p className="text-xl text-muted">
+          Two refinements. The split stops after {MAX_CLIMB_HOPS} hops: deeper than that, the remainder skips straight to the root instead of
+          scattering dust. And 20% of whatever an ancestor receives from below tops up <i>its</i> vault, so big trees sprout faster than
+          lonely ones.
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-pixel text-xs text-sap">2b. THE SPROUT BONUS</h2>
+        <p>
+          For its first hour, a new coin keeps <span className="text-blossom">75%</span> of its fees in its vault instead of 50%. Fresh sprouts
+          (the pink leaves) are the fastest way to grow a tree, which is why they&apos;re worth trading.
+        </p>
       </section>
 
       <section className="space-y-3">
@@ -133,7 +147,8 @@ export default function HowPage() {
         <p>
           Leaves are <span className="text-blossom">pink</span> for the first hour, <span className="text-leaf">green</span> after that and{' '}
           <span className="text-sap">gold</span> after a day. A coin with an empty vault and no trades for 24 hours goes dormant: its last sap
-          climbs, its leaves fall, and the bare branch stays on the tree forever. The palette shifts with the season.
+          climbs, its leaves fall, and the bare branch stays on the tree. Trade a dormant coin and it <span className="text-[#9fd8c8]">revives</span>:
+          the leaves grow back. The palette shifts with the season.
         </p>
       </section>
 

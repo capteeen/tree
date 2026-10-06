@@ -42,6 +42,12 @@ export const sfx = {
     const t = ctx.currentTime;
     for (let i = 0; i < Math.min(steps, 6); i++) blip(330 + i * 110, t + i * 0.07, 0.06, 'triangle', 0.04);
   },
+  crack() {
+    if (muted || !ctx) return;
+    const t = ctx.currentTime;
+    blip(90, t, 0.12, 'sawtooth', 0.06, 40);
+    blip(140, t + 0.05, 0.08, 'square', 0.04, 60);
+  },
   leafFall() {
     if (muted || !ctx) return;
     blip(660, ctx.currentTime, 0.5, 'square', 0.035, 110);

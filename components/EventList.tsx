@@ -10,6 +10,7 @@ const KIND: Record<TreeEvent['kind'], string> = {
   death: 'bg-dead text-ink',
   trade: 'bg-leaf text-[#1b1815]',
   claim: 'bg-leaf text-[#1b1815]',
+  revive: 'bg-[#9fd8c8] text-[#1b1815]',
 };
 
 export default function EventList({ events, highlight }: { events: TreeEvent[]; highlight?: string }) {

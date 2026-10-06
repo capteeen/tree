@@ -10,6 +10,7 @@ const COLORS: Record<TreeEvent['kind'], string> = {
   death: 'text-[#b08a6a]',
   trade: 'text-leaf',
   claim: 'text-leaf',
+  revive: 'text-[#9fd8c8]',
 };
 
 /** Live feed of real simulator events. The newest one slides in. */

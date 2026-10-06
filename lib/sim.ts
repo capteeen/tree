@@ -6,7 +6,7 @@
  * that reads the same shapes from chain (see README "Phase 2").
  */
 import type { Ca, Coin, GlobalStats, Tree, TreeEvent } from './types';
-import { splitClimb, splitFees } from './fees';
+import { splitClimb, splitFees, vaultShareFor, VAULT_TOPUP } from './fees';
 import { fmtSol } from './format';
 import { childName, rootName } from './names';
 import { fakeCa, fakeWallet, int, mulberry32, range, type Rng } from './rng';
@@ -126,6 +126,7 @@ function makeCoin(
     bornAt: p.at,
     lastTradeAt: p.at,
     alive: true,
+    revivals: 0,
     ownerWallet: p.owner,
   };
   w.coins[ca] = coin;
@@ -209,24 +210,58 @@ export function sproutChild(w: World, r: Rng, parent: Coin, at: number): TreeEve
 function payAncestors(w: World, path: Ca[], shares: number[]) {
   path.forEach((a, i) => {
     const anc = w.coins[a];
-    if (!anc) return;
+    if (!anc || shares[i] <= 0) return;
     anc.feesReceivedFromBelow += shares[i];
-    anc.ownerEarned += shares[i];
+    // a slice of what climbs in tops up the ancestor's vault, so big trees sprout faster
+    const topup = anc.alive ? shares[i] * VAULT_TOPUP : 0;
+    anc.vault += topup;
+    anc.ownerEarned += shares[i] - topup;
   });
+}
+
+/** Ancestors whose vaults crossed the threshold after a top-up sprout too. */
+function sproutReady(w: World, r: Rng, cas: Ca[], at: number, limits: Limits): TreeEvent[] {
+  const evs: TreeEvent[] = [];
+  for (const ca of cas) {
+    const c = w.coins[ca];
+    if (!c || !c.alive) continue;
+    const tree = w.trees[c.rootCa];
+    if (c.vault >= c.launchThreshold && c.depth < limits.maxDepth && tree.coins < limits.maxCoins) evs.push(...sproutChild(w, r, c, at));
+  }
+  return evs;
 }
 
 export function trade(w: World, r: Rng, ca: Ca, fee: number, at: number, limits: Limits): TreeEvent[] {
   const c = w.coins[ca];
-  if (!c || !c.alive) return [];
+  if (!c) return [];
   const tree = w.trees[c.rootCa];
+  const evs: TreeEvent[] = [];
+  if (!c.alive) {
+    // a trade on a dormant coin brings it back: leaves regrow
+    c.alive = true;
+    c.diedAt = undefined;
+    c.revivals++;
+    tree.alive++;
+    w.stats.aliveCoins++;
+    evs.push({
+      id: nextId(w),
+      kind: 'revive',
+      coinCa: ca,
+      rootCa: c.rootCa,
+      depth: c.depth,
+      text: `DEPTH-${c.depth} coin ${c.ticker} is back! Someone traded a dormant coin and its leaves regrew`,
+      at,
+    });
+  }
   const path = ancestors(w, ca);
-  const split = splitFees(fee, path.length);
+  const vaultShare = vaultShareFor(c.bornAt, at);
+  const bonus = vaultShare > 0.5;
+  const split = splitFees(fee, path.length, vaultShare);
   c.feesEarned += fee;
   c.trades++;
   c.lastTradeAt = at;
   c.vault += split.vault;
   tree.totalFees += fee;
-  const evs: TreeEvent[] = [];
   if (path.length === 0) {
     c.ownerEarned += split.climb;
     evs.push({
@@ -237,6 +272,7 @@ export function trade(w: World, r: Rng, ca: Ca, fee: number, at: number, limits:
       depth: 1,
       fee,
       amount: split.climb,
+      bonus,
       text: `ROOT ${c.ticker} traded: ${fmtSol(fee)} SOL fees, ${fmtSol(split.climb)} to its planter`,
       at,
     });
@@ -255,13 +291,12 @@ export function trade(w: World, r: Rng, ca: Ca, fee: number, at: number, limits:
       amounts: split.shares,
       amount: split.climb,
       fee,
-      text: `DEPTH-${c.depth} coin ${c.ticker} paid ${fmtSol(split.climb)} SOL up to ${path.length} ancestor${s(path.length)}`,
+      bonus,
+      text: `DEPTH-${c.depth} coin ${c.ticker} paid ${fmtSol(split.climb)} SOL up to ${path.length} ancestor${s(path.length)}${bonus ? ' (sprout bonus: kept 75%)' : ''}`,
       at,
     });
   }
-  if (c.vault >= c.launchThreshold && c.depth < limits.maxDepth && tree.coins < limits.maxCoins) {
-    evs.push(...sproutChild(w, r, c, at));
-  }
+  evs.push(...sproutReady(w, r, [ca, ...path], at, limits));
   return evs;
 }
 
@@ -307,6 +342,14 @@ export function kill(w: World, ca: Ca, at: number): TreeEvent[] {
     at,
   });
   return evs;
+}
+
+/** Coins whose state an event changed (for streaming deltas). */
+export function touchedBy(w: World, e: TreeEvent): Ca[] {
+  const set = new Set<Ca>([e.coinCa, ...(e.path ?? [])]);
+  const c = w.coins[e.coinCa];
+  if (c?.parentCa) set.add(c.parentCa);
+  return [...set];
 }
 
 export function claim(w: World, wallet: string, at: number): TreeEvent[] {
@@ -430,11 +473,4 @@ export function createGenesis(seed = SEED, now = Date.now()): { world: World; ev
   all.sort((a, b) => a.at - b.at);
   recomputeStats(w);
   return { world: w, events: all };
-}
-
-let serverGenesis: World | null = null;
-/** Server-side copy of the deterministic forest (for OG images / metadata). */
-export function genesisWorld(): World {
-  if (!serverGenesis) serverGenesis = createGenesis().world;
-  return serverGenesis;
 }

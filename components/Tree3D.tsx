@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { useStore } from '@/lib/store';
 import { onEvent } from '@/lib/bus';
 import { coinsOfTree } from '@/lib/sim';
-import { bounds, layoutTree, lerp3, type BranchNode, type V3 } from '@/lib/layout3d';
+import { bounds, layoutTree, lerp3, thicknessFor, type BranchNode, type V3 } from '@/lib/layout3d';
 import { leafColor, PALETTES } from '@/lib/season';
 import { hashStr } from '@/lib/rng';
 import { fmtSol } from '@/lib/format';
@@ -33,7 +33,8 @@ interface Packet {
   start: number;
   dur: number;
   size: number;
-  payouts: { at: number; pos: V3; amount: number }[];
+  payouts: { at: number; pos: V3; amount: number; ca?: Ca }[];
+  rootAmount: number;
   fired: number;
   done: boolean;
 }
@@ -54,6 +55,7 @@ interface Label {
   text: string;
   born: number;
   color: string;
+  big?: boolean;
 }
 
 function pixelTexture(kind: 'bark' | 'leaf' | 'ground') {
@@ -157,9 +159,16 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
     // ---------- state ----------
     let nodes = new Map<Ca, BranchNode>();
     let woodOwner: Ca[] = [];
+    let woodBase: THREE.Color[] = [];
     let leafOwner: Ca[] = [];
     const growStart = new Map<Ca, number>();
     const popped = new Set<Ca>();
+    /** coins whose branch is desaturating after a death (wall-clock start) */
+    const dying = new Map<Ca, number>();
+    /** branches lit gold because sap is (or just was) flowing through them: ca → expiry */
+    const lit = new Map<Ca, number>();
+    let litDirty = false;
+    let structKey = '';
     let dirty = true;
     let lastVersion = -1;
     let lastBuild = 0;
@@ -168,6 +177,8 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
     const packets: Packet[] = [];
     const parts: Debris[] = [];
     const labels: Label[] = [];
+    const DEATH_MS = 2000;
+    const GOLD = new THREE.Color('#e0a43a');
 
     const cam = {
       az: (hashStr(rootCa) % 628) / 100,
@@ -214,6 +225,7 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
       const barkA = new THREE.Color(p.bark);
       const barkB = new THREE.Color(p.barkDark);
       const deadC = new THREE.Color(p.dead);
+      woodBase = [];
       let wi = 0;
       let li = 0;
       woodOwner = [];
@@ -232,11 +244,16 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
           if (t > eased) break;
           const pos = lerp3(n.start, n.end, t);
           const s = n.thick * (1 - 0.28 * t) * (gs !== undefined && g < 1 ? 0.6 + 0.4 * eased : 1);
-          const col = !c.alive ? deadC : (h + k) % 4 === 0 ? barkB : barkA;
+          let col = !c.alive ? deadC : (h + k) % 4 === 0 ? barkB : barkA;
+          const dy = dying.get(c.ca);
+          if (dy !== undefined) col = ((h + k) % 4 === 0 ? barkB : barkA).clone().lerp(deadC, Math.min(1, (now - dy) / DEATH_MS));
           setInst(wood, wi, [snap(pos[0]), snap(pos[1]), snap(pos[2])], s, col);
+          woodBase[wi] = col;
           woodOwner[wi++] = c.ca;
         }
-        if (!c.alive || g < 0.85) continue;
+        const dy = dying.get(c.ca);
+        const wither = dy === undefined ? 0 : Math.min(1, (now - dy) / DEATH_MS);
+        if ((!c.alive && dy === undefined) || g < 0.85 || wither >= 1) continue;
         // pop: overshoot when the leaves first appear
         let pop = 1;
         if (gs !== undefined) {
@@ -253,8 +270,8 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
           const r = R * (0.45 + ((hj >>> 17) % 100) / 180);
           const off: V3 = [Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r + 0.15, Math.sin(a) * Math.cos(e) * r];
           const pos: V3 = [n.end[0] + off[0], n.end[1] + off[1], n.end[2] + off[2]];
-          const s = (0.36 + ((hj >>> 5) % 30) / 100) * pop;
-          const col = lc.clone().offsetHSL(0, 0, (((hj >>> 3) % 20) - 10) / 160);
+          const s = (0.36 + ((hj >>> 5) % 30) / 100) * pop * (1 - wither * 0.9);
+          const col = lc.clone().offsetHSL(0, 0, (((hj >>> 3) % 20) - 10) / 160).lerp(deadC, wither);
           setInst(leaves, li, [snap(pos[0]), snap(pos[1]), snap(pos[2])], s, col);
           leafOwner[li++] = c.ca;
         }
@@ -268,6 +285,39 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
       }
       if (firstBuild) buildGround();
       lastBuild = now;
+      litDirty = true;
+    }
+
+    /** Cheap fingerprint of everything the instance buffers depend on. */
+    function fingerprint(wall: number) {
+      const { world } = useStore.getState();
+      let k = '';
+      for (const c of coinsOfTree(world, rootCa)) {
+        const age = wall - c.bornAt < 3_600_000 ? 0 : wall - c.bornAt < 86_400_000 ? 1 : 2;
+        k += `${c.ca.slice(0, 6)}${c.alive ? 1 : 0}${age}${Math.round(thicknessFor(c.feesEarned + c.feesReceivedFromBelow) * 16)}|`;
+      }
+      return k;
+    }
+
+    /** Tint the wood of lit branches gold without a full rebuild. */
+    function applyTint(now: number) {
+      let changed = false;
+      lit.forEach((exp, ca) => {
+        if (now > exp) {
+          lit.delete(ca);
+          changed = true;
+        }
+      });
+      if (!litDirty && !changed) return;
+      litDirty = false;
+      for (let i = 0; i < wood.count; i++) {
+        const base = woodBase[i];
+        if (!base) continue;
+        const exp = lit.get(woodOwner[i]);
+        if (exp === undefined) wood.setColorAt(i, base);
+        else wood.setColorAt(i, tmpC.copy(base).lerp(GOLD, Math.min(1, (exp - now) / 600) * 0.7 + 0.1));
+      }
+      if (wood.instanceColor) wood.instanceColor.needsUpdate = true;
     }
 
     // ---------- events → animation (never on a timer) ----------
@@ -279,7 +329,12 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
         growStart.set(e.coinCa, Date.now());
         dirty = true;
         sfx.sprout();
+      } else if (e.kind === 'revive') {
+        growStart.set(e.coinCa, Date.now() - GROW_MS * 0.8); // leaves pop straight back
+        dirty = true;
+        sfx.sprout();
       } else if (e.kind === 'death') {
+        dying.set(e.coinCa, Date.now());
         dirty = true;
         const n = nodes.get(e.coinCa);
         const c = useStore.getState().world.coins[e.coinCa];
@@ -297,7 +352,8 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
             sway: Math.random() * 6,
           });
         }
-        sfx.leafFall();
+        sfx.crack();
+        setTimeout(() => sfx.leafFall(), 350);
       } else if (e.kind === 'climb' && e.path?.length) {
         const payer = nodes.get(e.coinCa);
         if (!payer) return;
@@ -317,17 +373,24 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
           const b = route[i];
           cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
         }
+        const dur = 1100 + 420 * e.path.length;
         packets.push({
           route,
           cum,
           total: cum[cum.length - 1],
           start: now,
-          dur: 1100 + 420 * e.path.length,
-          size: Math.min(0.75, 0.32 + Math.log1p((e.amount ?? 0) * 400) * 0.08),
-          payouts: payouts.map((p) => ({ ...p, at: cum[p.at] })),
+          dur,
+          size: Math.min(1.1, 0.4 + Math.log1p((e.amount ?? 0) * 400) * 0.16),
+          payouts: payouts.map((p) => ({ ...p, at: cum[p.at], ca: e.path![payouts.indexOf(p)] })),
+          rootAmount: e.amounts?.[e.amounts.length - 1] ?? 0,
           fired: 0,
           done: false,
         });
+        // the whole ancestor path lights up while the sap is in flight, then fades
+        const exp = now + dur + 700;
+        // (the root is on every path, so it stays bark-coloured and gets the ring flash instead)
+        for (const ca of [e.coinCa, ...e.path]) if (ca !== rootCa) lit.set(ca, Math.max(lit.get(ca) ?? 0, exp));
+        litDirty = true;
         sfx.climb(e.path.length);
       }
     }
@@ -493,14 +556,29 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
           dirty = true;
         }
       });
-      if (st.version !== lastVersion && (now - lastBuild > 700 || growing)) {
-        dirty = true;
+      let withering = false;
+      dying.forEach((t, ca) => {
+        if (wall - t < DEATH_MS) withering = true;
+        else {
+          dying.delete(ca);
+          dirty = true;
+        }
+      });
+      // Rebuild instance buffers only when something visible changed (a sprout,
+      // a death, a thickness step, a leaf-age change), not on every trade.
+      if (st.version !== lastVersion && now - lastBuild > 700) {
         lastVersion = st.version;
+        const k = fingerprint(wall);
+        if (k !== structKey) {
+          structKey = k;
+          dirty = true;
+        }
       }
-      if (dirty || growing) {
+      if (dirty || growing || (withering && now - lastBuild > 80)) {
         rebuild(wall);
         dirty = false;
       }
+      applyTint(now);
 
       // camera
       const f = focusRef.current;
@@ -543,25 +621,28 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
         const d = (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2) * pk.total;
         while (pk.fired < pk.payouts.length && d >= pk.payouts[pk.fired].at - 1e-6) {
           const po = pk.payouts[pk.fired++];
-          labels.push({ pos: po.pos, text: `+${fmtSol(po.amount)}`, born: now, color: '#ffc44d' });
+          if (pk.fired < pk.payouts.length && po.amount > 0) labels.push({ pos: po.pos, text: `+${fmtSol(po.amount)}`, born: now, color: '#ffc44d' });
           for (let i = 0; i < 6; i++) {
             const a = Math.random() * Math.PI * 2;
             parts.push({ p: [...po.pos] as V3, v: [Math.cos(a) * 1.6, 1 + Math.random(), Math.sin(a) * 1.6], born: now, life: 420, color: sapCol.clone(), size: 0.18, g: -4, sway: 0 });
           }
         }
-        for (let k = 0; k <= TRAIL && si < MAX_SAP - 2; k++) {
-          const p = pointAlong(pk, d - k * 0.32);
+        for (let k = 0; k <= TRAIL && si < MAX_SAP - 3; k++) {
+          const p = pointAlong(pk, d - k * 0.34);
           const fade = 1 - k / (TRAIL + 1);
-          setInst(sap, si++, p, pk.size * (0.45 + 0.55 * fade), (k === 0 ? hot : sapCol).clone().multiplyScalar(fade));
+          setInst(sap, si++, p, pk.size * (0.5 + 0.5 * fade), (k === 0 ? hot : sapCol).clone().multiplyScalar(0.5 + 0.5 * fade));
         }
-        // halo
-        setInst(sap, si++, pointAlong(pk, d), pk.size * 2.1, sapCol.clone().multiplyScalar(0.28));
+        // bloom: a pulsing halo around the head
+        const pulse = 0.85 + 0.15 * Math.sin(now / 60);
+        setInst(sap, si++, pointAlong(pk, d), pk.size * 2.4 * pulse, sapCol.clone().multiplyScalar(0.35));
+        setInst(sap, si++, pointAlong(pk, d), pk.size * 3.6 * pulse, sapCol.clone().multiplyScalar(0.12));
         if (t >= 1 && !pk.done) {
           pk.done = true;
-          // the sap arrived at the root: a ring of light at the trunk base
-          for (let i = 0; i < 16; i++) {
-            const a = (i / 16) * Math.PI * 2;
-            parts.push({ p: [0, 0.2, 0], v: [Math.cos(a) * 3.2, 0.6, Math.sin(a) * 3.2], born: now, life: 520, color: sapCol.clone(), size: 0.2, g: 0, sway: 0 });
+          // the sap arrived at the root: a ring of light at the trunk base and the root's cut
+          labels.push({ pos: [0, 1.2, 0], text: `ROOT +${fmtSol(pk.rootAmount)}`, born: now, color: '#ffd36b', big: true });
+          for (let i = 0; i < 20; i++) {
+            const a = (i / 20) * Math.PI * 2;
+            parts.push({ p: [0, 0.2, 0], v: [Math.cos(a) * 3.6, 0.8, Math.sin(a) * 3.6], born: now, life: 650, color: sapCol.clone(), size: 0.26, g: 0, sway: 0 });
           }
         }
       }
@@ -600,11 +681,11 @@ export default function Tree3D({ rootCa, focusCa = null, onSelect, pixel }: Prop
 
       // labels overlay
       octx.clearRect(0, 0, overlay.width, overlay.height);
-      octx.font = `${Math.round(9 * dpr)}px "Press Start 2P", monospace`;
       octx.textAlign = 'center';
       for (let i = labels.length - 1; i >= 0; i--) {
         const L = labels[i];
-        const a = (now - L.born) / 1300;
+        octx.font = `${Math.round((L.big ? 12 : 9) * dpr)}px "Press Start 2P", monospace`;
+        const a = (now - L.born) / (L.big ? 1800 : 1300);
         if (a >= 1) {
           labels.splice(i, 1);
           continue;

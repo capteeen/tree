@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import TreePageView from '@/components/TreePageView';
-import { genesisWorld } from '@/lib/sim';
+import { sim } from '@/lib/server/sim';
+
+export const dynamic = 'force-dynamic';
 
 export function generateMetadata({ params }: { params: { root: string } }): Metadata {
-  const root = genesisWorld().coins[params.root];
+  const root = sim().world.coins[params.root];
   return { title: root ? `${root.ticker} tree · TREE` : 'Tree · TREE' };
 }
 

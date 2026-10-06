@@ -2,6 +2,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import WalletGate from '@/components/WalletGate';
+import { WalletMultiButton } from '@/components/WalletProviders';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { useStore } from '@/lib/store';
 import { LAUNCH_COST, LAUNCH_THRESHOLD, ROOT_RESERVE } from '@/lib/sim';
@@ -27,7 +29,7 @@ async function toThumb(file: File): Promise<string> {
   return c.toDataURL('image/png');
 }
 
-export default function PlantPage() {
+function PlantForm() {
   const router = useRouter();
   const { publicKey } = useWallet();
   const { setVisible } = useWalletModal();
@@ -54,18 +56,23 @@ export default function PlantPage() {
     if (!publicKey) return setVisible(true);
     if (!valid) return setErr('Name needs 2+ characters. Ticker: 2–10 of A–Z, 0–9, _.');
     setBusy(true);
-    // TODO(phase2): launchOnPump({ creator: newRootVault, ... }) and have the user sign the transaction.
-    await new Promise((r) => setTimeout(r, 900));
-    const ca = useStore.getState().plant({
-      name: name.trim(),
-      ticker,
-      image,
-      description: description.trim() || undefined,
-      telegram: telegram.trim() || undefined,
-      owner: publicKey.toBase58(),
-      devBuy: dev,
-    });
-    router.push(`/tree/${ca}`);
+    try {
+      // TODO(phase2): launchOnPump({ creator: newRootVault, ... }) and have the user sign the transaction.
+      await new Promise((r) => setTimeout(r, 600));
+      const ca = await useStore.getState().plant({
+        name: name.trim(),
+        ticker,
+        image,
+        description: description.trim() || undefined,
+        telegram: telegram.trim() || undefined,
+        owner: publicKey.toBase58(),
+        devBuy: dev,
+      });
+      router.push(`/tree/${ca}`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'launch failed');
+      setBusy(false);
+    }
   };
 
   return (
@@ -158,11 +165,25 @@ export default function PlantPage() {
 
         {err && <p className="mt-2 text-lg text-blossom">{err}</p>}
 
-        <button type="submit" disabled={busy || !ready || (!!publicKey && !valid)} className="px-btn mt-4 w-full text-xs">
-          {!publicKey ? 'CONNECT WALLET' : busy ? 'PLANTING…' : 'PLANT IT'}
-        </button>
+        {publicKey ? (
+          <button type="submit" disabled={busy || !ready || !valid} className="px-btn mt-4 w-full text-xs">
+            {busy ? 'PLANTING…' : 'PLANT IT'}
+          </button>
+        ) : (
+          <div className="wallet-wrap mt-4 flex justify-center">
+            <WalletMultiButton>CONNECT WALLET TO PLANT</WalletMultiButton>
+          </div>
+        )}
         <p className="mt-2 text-center text-base text-muted">Phase 1: the launch is simulated. No transaction is sent.</p>
       </form>
     </div>
+  );
+}
+
+export default function PlantPage() {
+  return (
+    <WalletGate>
+      <PlantForm />
+    </WalletGate>
   );
 }

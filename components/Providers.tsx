@@ -1,17 +1,16 @@
 'use client';
-import { useEffect, useMemo } from 'react';
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
-import { clusterApiUrl } from '@solana/web3.js';
-import '@solana/wallet-adapter-react-ui/styles.css';
+import { useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { range, liveRng } from '@/lib/rng';
 
-/** Drives the mock simulator: each tree trades every 2–6 seconds; idle coins occasionally go dormant. */
+/**
+ * Boots the store. In server mode the world streams in over SSE; in local
+ * mode this drives the in-browser simulator (each tree trades every 2–6 s,
+ * idle coins occasionally go dormant).
+ */
 function SimDriver() {
   const ready = useStore((s) => s.ready);
+  const mode = useStore((s) => s.mode);
   const theme = useStore((s) => s.theme);
 
   useEffect(() => {
@@ -23,7 +22,7 @@ function SimDriver() {
   }, [theme]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || mode !== 'local') return;
     const next = new Map<string, number>();
     const iv = setInterval(() => {
       const st = useStore.getState();
@@ -42,23 +41,16 @@ function SimDriver() {
       clearInterval(iv);
       clearInterval(reaper);
     };
-  }, [ready]);
+  }, [ready, mode]);
 
   return null;
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const endpoint = process.env.NEXT_PUBLIC_SOLANA_RPC || clusterApiUrl('mainnet-beta');
-  // Backpack (and any other Wallet Standard wallet) is detected automatically.
-  const wallets = useMemo(() => [new PhantomWalletAdapter(), new SolflareWalletAdapter()], []);
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          <SimDriver />
-          {children}
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <>
+      <SimDriver />
+      {children}
+    </>
   );
 }

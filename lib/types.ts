@@ -32,6 +32,8 @@ export interface Coin {
   lastTradeAt: number;
   diedAt?: number;
   alive: boolean;
+  /** Times this coin came back from dormancy. */
+  revivals: number;
   ownerWallet: string;
 }
 
@@ -45,7 +47,7 @@ export interface Tree {
   plantedAt: number;
 }
 
-export type EventKind = 'sprout' | 'climb' | 'trade' | 'death' | 'claim';
+export type EventKind = 'sprout' | 'climb' | 'trade' | 'death' | 'revive' | 'claim';
 
 export interface TreeEvent {
   id: string;
@@ -63,6 +65,8 @@ export interface TreeEvent {
   fee?: number;
   /** Dormancy flush: the coin's whole remaining vault climbed at once. */
   flush?: boolean;
+  /** Sprout bonus applied (coin younger than 1h kept 75%). */
+  bonus?: boolean;
   text: string;
   at: number;
 }

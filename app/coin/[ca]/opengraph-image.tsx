@@ -1,9 +1,11 @@
 import { ImageResponse } from 'next/og';
-import { genesisWorld, lineage } from '@/lib/sim';
+import { lineage } from '@/lib/sim';
+import { sim } from '@/lib/server/sim';
 import { pixelFont } from '@/lib/ogFont';
 import { hashStr } from '@/lib/rng';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export const alt = 'A coin on TREE';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
@@ -43,7 +45,7 @@ function PixelArrow() {
 }
 
 export default async function Image({ params }: { params: { ca: string } }) {
-  const w = genesisWorld();
+  const w = sim().world;
   const c = w.coins[params.ca];
   const line = c ? lineage(w, c.ca) : [];
   const ticker = c?.ticker ?? 'TREE';

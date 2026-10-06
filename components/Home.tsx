@@ -31,7 +31,7 @@ export default function Home() {
     <div>
       <section className="relative h-[62svh] min-h-[380px] w-full overflow-hidden sm:h-[72vh]">
         {rootCa && <TreeView rootCa={rootCa} onSelect={(ca) => router.push(`/coin/${ca}`)} />}
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-wrap items-start justify-between gap-2 p-3">
+        <div className="pointer-events-none absolute inset-x-0 top-0 hidden flex-wrap items-start justify-between gap-2 p-3 sm:flex">
           {root && tree && (
             <div className="pointer-events-auto bg-[#1b1815]/80 p-2 text-[#f4f4f2]">
               <div className="font-pixel text-[7px] text-[#a89c8c] sm:text-[8px]">BIGGEST TREE BY FEES</div>
@@ -57,6 +57,7 @@ export default function Home() {
               <span className="text-leaf">A FAMILY TREE</span>
             </h1>
             <p className="mt-1 hidden text-lg text-muted sm:block">drag to rotate · scroll to zoom · click a branch to open that coin</p>
+            <p className="mt-1 text-base text-muted sm:hidden">drag · pinch · tap a branch</p>
           </div>
           <Link href="/plant" className="px-btn pointer-events-auto shrink-0 text-[10px] sm:text-xs">
             PLANT A ROOT
@@ -65,6 +66,16 @@ export default function Home() {
       </section>
 
       <div className="mx-auto max-w-7xl space-y-12 px-3 pt-6">
+        {root && tree && (
+          <div className="-mt-2 flex items-center justify-between gap-2 text-lg sm:hidden">
+            <Link href={`/tree/${root.ca}`} className="truncate">
+              <span className="font-pixel text-[8px] text-muted">BIGGEST </span>
+              <span className="font-pixel text-[9px] text-leaf">{root.ticker}</span>
+              <span className="text-muted"> · {tree.coins} coins · {fmtSol(tree.totalFees)} SOL</span>
+            </Link>
+            <DeepestBadge />
+          </div>
+        )}
         <Counters />
 
         <section>

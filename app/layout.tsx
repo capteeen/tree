@@ -4,6 +4,7 @@ import Providers from '@/components/Providers';
 import Header from '@/components/Header';
 import Ticker from '@/components/Ticker';
 import Footer from '@/components/Footer';
+import SoundNudge from '@/components/SoundNudge';
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Ticker />
           <main>{children}</main>
           <Footer />
+          <SoundNudge />
         </Providers>
       </body>
     </html>

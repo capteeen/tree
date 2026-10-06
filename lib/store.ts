@@ -20,12 +20,27 @@ import {
   type World,
 } from './sim';
 
-const SAVE_KEY = 'tree.sim.v1';
+const SAVE_KEY = 'tree.sim.v2';
 const MAX_EVENTS = 6000;
-const SAVED_EVENTS = 3000;
+const SAVED_EVENTS = 1500;
+
+/**
+ * 'server': the shared world streamed from /api (everyone sees the same tree).
+ * 'local':  this browser runs its own simulator (static hosting, offline, or the API failed).
+ */
+export type Mode = 'server' | 'local';
+
+interface ServerMsg {
+  event: TreeEvent;
+  coins: World['coins'][string][];
+  tree?: World['trees'][string];
+  stats: World['stats'];
+}
 
 interface State {
   ready: boolean;
+  mode: Mode;
+  connected: boolean;
   world: World;
   /** Chronological, oldest first. */
   events: TreeEvent[];
@@ -36,8 +51,8 @@ interface State {
   init(): void;
   tick(rootCa: Ca): void;
   reap(): void;
-  plant(input: PlantInput): Ca;
-  claim(wallet: string): number;
+  plant(input: PlantInput): Promise<Ca>;
+  claim(wallet: string): Promise<number>;
   reset(): void;
   setTheme(t: 'dark' | 'light'): void;
   setMuted(m: boolean): void;
@@ -59,31 +74,98 @@ function load(): { world: World; events: TreeEvent[] } | null {
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function scheduleSave() {
   if (saveTimer) return;
+  // Local mode only: write once the browser is idle, at most every 15 s.
   saveTimer = setTimeout(() => {
-    saveTimer = null;
-    const { world, events } = useStore.getState();
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify({ world, events: events.slice(-SAVED_EVENTS) }));
-    } catch {
-      /* storage full or blocked: the sim still runs in memory */
-    }
-  }, 4000);
+    const run = () => {
+      saveTimer = null;
+      const { world, events, mode } = useStore.getState();
+      if (mode !== 'local') return;
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({ world, events: events.slice(-SAVED_EVENTS) }));
+      } catch {
+        /* storage full or blocked: the sim still runs in memory */
+      }
+    };
+    if ('requestIdleCallback' in window) (window as Window & { requestIdleCallback: (cb: () => void, o?: { timeout: number }) => void }).requestIdleCallback(run, { timeout: 5000 });
+    else run();
+  }, 15000);
 }
 
 export const useStore = create<State>()((set, get) => {
-  const commit = (evs: TreeEvent[]) => {
+  const publish = (evs: TreeEvent[]) => {
     if (!evs.length) return;
-    const { world, events, version } = get();
-    recomputeStats(world);
+    const { events, version } = get();
     let next = events.concat(evs);
     if (next.length > MAX_EVENTS) next = next.slice(next.length - MAX_EVENTS);
     set({ events: next, version: version + 1 });
     evs.forEach(emit);
+  };
+
+  /** Local mode: events came out of our own reducers. */
+  const commit = (evs: TreeEvent[]) => {
+    if (!evs.length) return;
+    recomputeStats(get().world);
+    publish(evs);
     scheduleSave();
+  };
+
+  /** Server mode: apply the delta, then emit the event. */
+  const apply = (msg: ServerMsg) => {
+    const { world } = get();
+    for (const c of msg.coins) world.coins[c.ca] = c;
+    if (msg.tree) {
+      if (!world.trees[msg.tree.rootCa]) world.roots.push(msg.tree.rootCa);
+      world.trees[msg.tree.rootCa] = msg.tree;
+    }
+    world.stats = msg.stats;
+    publish([msg.event]);
+  };
+
+  let es: EventSource | null = null;
+  const connect = () => {
+    if (es) es.close();
+    es = new EventSource('/api/events');
+    es.onopen = () => set({ connected: true });
+    es.onmessage = (e) => {
+      try {
+        apply(JSON.parse(e.data));
+      } catch {}
+    };
+    es.onerror = () => {
+      set({ connected: false });
+      // EventSource reconnects on its own; after a reconnect, resync the snapshot
+      // so nothing that happened while we were away is missed.
+      resync();
+    };
+  };
+  let resyncTimer: ReturnType<typeof setTimeout> | null = null;
+  const resync = () => {
+    if (resyncTimer) return;
+    resyncTimer = setTimeout(async () => {
+      resyncTimer = null;
+      try {
+        const r = await fetch('/api/world', { cache: 'no-store' });
+        if (!r.ok) return;
+        const snap = await r.json();
+        const known = new Set(get().events.map((e) => e.id));
+        const fresh = (snap.events as TreeEvent[]).filter((e) => !known.has(e.id));
+        set({ world: snap.world, version: get().version + 1 });
+        publish(fresh.slice(-50));
+      } catch {}
+    }, 1500);
+  };
+
+  const startLocal = () => {
+    const saved = load();
+    const { world, events } = saved ?? createGenesis();
+    recomputeStats(world);
+    set({ world, events, ready: true, mode: 'local', connected: false, version: 1 });
   };
 
   return {
     ready: false,
+    mode: 'server',
+    connected: false,
     world: { coins: {}, roots: [], trees: {}, stats: { trees: 0, coins: 0, aliveCoins: 0, deepest: 0, solClimbed: 0 }, seq: 0 },
     events: [],
     version: 0,
@@ -93,17 +175,29 @@ export const useStore = create<State>()((set, get) => {
 
     init() {
       if (get().ready) return;
-      const saved = load();
-      const { world, events } = saved ?? createGenesis();
-      recomputeStats(world);
       let theme: 'dark' | 'light' = 'dark';
       try {
         if (localStorage.getItem('tree.theme') === 'light') theme = 'light';
       } catch {}
-      set({ world, events, ready: true, version: 1, theme });
+      set({ theme });
+      (async () => {
+        try {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 4000);
+          const r = await fetch('/api/world', { cache: 'no-store', signal: ctrl.signal });
+          clearTimeout(t);
+          if (!r.ok) throw new Error(String(r.status));
+          const snap = await r.json();
+          set({ world: snap.world, events: snap.events, ready: true, mode: 'server', version: 1 });
+          connect();
+        } catch {
+          startLocal();
+        }
+      })();
     },
 
     tick(rootCa) {
+      if (get().mode !== 'local') return;
       const { world } = get();
       const now = Date.now();
       const ca = pickTrader(world, liveRng, rootCa, now);
@@ -112,6 +206,7 @@ export const useStore = create<State>()((set, get) => {
     },
 
     reap() {
+      if (get().mode !== 'local') return;
       const { world } = get();
       const now = Date.now();
       const idle = Object.values(world.coins).filter(
@@ -122,15 +217,28 @@ export const useStore = create<State>()((set, get) => {
       commit(kill(world, victim.ca, now));
     },
 
-    plant(input) {
-      const { world } = get();
+    async plant(input) {
+      if (get().mode === 'server') {
+        const r = await fetch('/api/plant', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? 'launch failed');
+        const { ca } = await r.json();
+        // the sprout arrives on the stream; wait briefly so the tree page finds it
+        for (let i = 0; i < 20 && !get().world.coins[ca]; i++) await new Promise((res) => setTimeout(res, 100));
+        if (!get().world.coins[ca]) resync();
+        return ca;
+      }
       // TODO(phase2): launch on pump.fun via PumpPortal and wait for the mint (see lib/phase2/pumpportal.ts).
-      const evs = plantRoot(world, liveRng, input, Date.now());
+      const evs = plantRoot(get().world, liveRng, input, Date.now());
       commit(evs);
       return evs[0].coinCa;
     },
 
-    claim(wallet) {
+    async claim(wallet) {
+      if (get().mode === 'server') {
+        const r = await fetch('/api/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet }) });
+        if (!r.ok) throw new Error('claim failed');
+        return (await r.json()).amount as number;
+      }
       // TODO(phase2): build + sign a claim transaction from each owned coin's vault.
       const evs = simClaim(get().world, wallet, Date.now());
       commit(evs);
@@ -141,6 +249,7 @@ export const useStore = create<State>()((set, get) => {
       try {
         localStorage.removeItem(SAVE_KEY);
       } catch {}
+      if (get().mode === 'server') return;
       const { world, events } = createGenesis();
       set({ world, events, version: get().version + 1 });
     },
@@ -154,6 +263,9 @@ export const useStore = create<State>()((set, get) => {
 
     setMuted(muted) {
       setSoundMuted(muted);
+      try {
+        localStorage.setItem('tree.muted', muted ? '1' : '0');
+      } catch {}
       set({ muted });
     },
 

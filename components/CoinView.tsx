@@ -13,6 +13,9 @@ import ProgressBar from './ProgressBar';
 import Tree2D from './Tree2D';
 import EventList from './EventList';
 import Num, { ev } from './Num';
+import Sparkline from './Sparkline';
+import ShareButton from './ShareButton';
+import { FRESH_MS } from '@/lib/fees';
 
 function Stat({ label, children, color = '' }: { label: string; children: React.ReactNode; color?: string }) {
   return (
@@ -66,6 +69,12 @@ export default function CoinView({ ca }: { ca: string }) {
               {coin.alive ? (Date.now() - coin.bornAt < 3600e3 ? 'FRESH' : Date.now() - coin.bornAt < 86400e3 ? 'GROWING' : 'ESTABLISHED') : 'DORMANT'}
             </span>
             <span className="bg-panel2 px-1.5 py-1 font-pixel text-[8px]">DEPTH {coin.depth}</span>
+            {coin.alive && Date.now() - coin.bornAt < FRESH_MS && (
+              <span className="bg-blossom px-1.5 py-1 font-pixel text-[8px] text-[#1b1815]" title="For its first hour a coin keeps 75% of its fees in its vault">
+                SPROUT BONUS
+              </span>
+            )}
+            {coin.revivals > 0 && <span className="bg-[#9fd8c8] px-1.5 py-1 font-pixel text-[8px] text-[#1b1815]">REVIVED ×{coin.revivals}</span>}
           </div>
           <div className="mt-1 text-xl text-muted">
             {coin.name} · <span title={coin.ca}>{shortCa(coin.ca)}</span> · born {timeAgo(coin.bornAt)}
@@ -81,13 +90,21 @@ export default function CoinView({ ca }: { ca: string }) {
           </div>
           {coin.description && <p className="mt-1 text-xl leading-tight">{coin.description}</p>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <a href={`https://pump.fun/coin/${coin.ca}`} target="_blank" rel="noreferrer" className="px-btn px-btn-leaf text-[10px]">
             TRADE ON PUMP.FUN
           </a>
           <Link href={`/tree/${coin.rootCa}`} className="px-btn px-btn-ghost text-[10px]">
             TREE
           </Link>
+          <ShareButton
+            path={`/coin/${coin.ca}`}
+            text={
+              coin.depth === 1
+                ? `I planted ${coin.ticker} on TREE. ${descendantsCount(world, coin.ca)} coins grow beneath it and every one pays it a cut. 🌳`
+                : `${coin.ticker} is depth ${coin.depth} in the ${world.coins[coin.rootCa]?.ticker} tree. ${coin.depth - 1} ancestor${coin.depth === 2 ? ' gets' : 's get'} paid every time it trades. 🌳`
+            }
+          />
         </div>
       </div>
 
@@ -123,7 +140,10 @@ export default function CoinView({ ca }: { ca: string }) {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[3fr_2fr]">
-        <FeeWaterfall ca={ca} />
+        <div className="space-y-4">
+          <FeeWaterfall ca={ca} />
+          <Sparkline ca={ca} />
+        </div>
         <div className="space-y-4">
           <div className="px-box p-3">
             <div className="mb-2 flex items-baseline justify-between">
