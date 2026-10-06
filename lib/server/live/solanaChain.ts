@@ -39,8 +39,12 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export interface SolanaChainOptions {
   rpcUrl: string;
   cluster: string;
-  /** micro-lamports per compute unit */
+  /** micro-lamports per compute unit (fixed, or the fallback when estimates fail) */
   priorityMicroLamports: number;
+  /** Ask the RPC for a live estimate (Helius getPriorityFeeEstimate). */
+  dynamicPriorityFee?: boolean;
+  /** Never pay more than this per compute unit, whatever the estimate says. */
+  maxPriorityMicroLamports?: number;
   /** Max slippage on the dev buy, in basis points. */
   devBuySlippageBps: number;
 }
@@ -62,7 +66,9 @@ export class SolanaChain implements Chain {
     this.conn = new Connection(o.rpcUrl, { commitment: 'confirmed' });
     this.pump = new OnlinePumpSdk(this.conn);
     // 5000 base + priority on ~200k CU
-    this.txFee = 5000 + Math.ceil((o.priorityMicroLamports * 200_000) / 1_000_000);
+    // budget for the worst case so vault floats are never short
+    const cap = Math.max(o.priorityMicroLamports, o.maxPriorityMicroLamports ?? o.priorityMicroLamports);
+    this.txFee = 5000 + Math.ceil((cap * 200_000) / 1_000_000);
   }
 
   async balance(pk: PublicKey) {
@@ -89,14 +95,46 @@ export class SolanaChain implements Chain {
     return best;
   }
 
+  private feeCache: { at: number; key: string; value: number } | null = null;
+
+  /**
+   * Priority fee in micro-lamports per CU. With Helius, a live "High" estimate
+   * for the accounts the transaction touches (cached 20 s), capped; otherwise
+   * the fixed PRIORITY_FEE_MICROLAMPORTS.
+   */
+  private async priorityFee(accounts: PublicKey[]): Promise<number> {
+    const base = this.o.priorityMicroLamports;
+    if (!this.o.dynamicPriorityFee) return base;
+    const keys = [...new Set(accounts.map((a) => a.toBase58()))].slice(0, 20);
+    const key = keys.slice(0, 3).join(',');
+    if (this.feeCache && this.feeCache.key === key && Date.now() - this.feeCache.at < 20_000) return this.feeCache.value;
+    try {
+      const r = await fetch(this.o.rpcUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 'tree', method: 'getPriorityFeeEstimate', params: [{ accountKeys: keys, options: { priorityLevel: 'High' } }] }),
+        signal: AbortSignal.timeout(4000),
+      });
+      const j = (await r.json()) as { result?: { priorityFeeEstimate?: number } };
+      const est = j.result?.priorityFeeEstimate;
+      if (typeof est !== 'number' || !Number.isFinite(est)) return base;
+      const value = Math.min(Math.max(Math.ceil(est), 1_000), this.o.maxPriorityMicroLamports ?? base);
+      this.feeCache = { at: Date.now(), key, value };
+      return value;
+    } catch {
+      return base;
+    }
+  }
+
   private async sign(payer: Keypair, ixs: TransactionInstruction[], extra: Keypair[] = [], cu = 200_000): Promise<SignedTx> {
+    const price = await this.priorityFee(ixs.flatMap((ix) => [ix.programId, ...ix.keys.filter((k) => k.isWritable).map((k) => k.pubkey)]));
     const { blockhash, lastValidBlockHeight } = await this.conn.getLatestBlockhash('confirmed');
     const msg = new TransactionMessage({
       payerKey: payer.publicKey,
       recentBlockhash: blockhash,
       instructions: [
         ComputeBudgetProgram.setComputeUnitLimit({ units: cu }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: this.o.priorityMicroLamports }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: price }),
         ...ixs,
       ],
     }).compileToV0Message();

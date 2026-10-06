@@ -58,12 +58,16 @@ export function createLiveEngine(mode: 'devchain' | 'live'): LiveEngine {
 
   let chain;
   if (mode === 'live') {
-    const rpcUrl = process.env.SOLANA_RPC_URL;
-    if (!rpcUrl) throw new Error('TREE_MODE=live needs SOLANA_RPC_URL (a paid RPC such as Helius or Triton is strongly recommended)');
+    const helius = process.env.HELIUS_API_KEY;
+    const rpcUrl = process.env.SOLANA_RPC_URL || (helius ? `https://mainnet.helius-rpc.com/?api-key=${helius}` : '');
+    if (!rpcUrl) throw new Error('TREE_MODE=live needs HELIUS_API_KEY or SOLANA_RPC_URL');
+    const isHelius = rpcUrl.includes('helius');
     chain = new SolanaChain({
       rpcUrl,
       cluster: process.env.SOLANA_CLUSTER || 'mainnet-beta',
       priorityMicroLamports: num('PRIORITY_FEE_MICROLAMPORTS', 50_000),
+      dynamicPriorityFee: (process.env.DYNAMIC_PRIORITY_FEE ?? (isHelius ? '1' : '0')) === '1',
+      maxPriorityMicroLamports: num('MAX_PRIORITY_FEE_MICROLAMPORTS', 500_000),
       devBuySlippageBps: num('DEV_BUY_SLIPPAGE_BPS', 300),
     });
   } else chain = new FakeChain();
@@ -91,6 +95,7 @@ export function createLiveEngine(mode: 'devchain' | 'live'): LiveEngine {
 
   void engine.start(mode === 'devchain' ? { launches: 1500, fees: 2000, dormancy: 15_000 } : undefined);
   if (mode === 'devchain') void seedDevchain(engine, chain as FakeChain, log);
+  // never log the RPC URL: it contains the API key
   log(`engine started (${chain.cluster}, metadata: ${metaProvider})`);
   return engine;
 }

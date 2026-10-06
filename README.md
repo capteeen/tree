@@ -92,9 +92,17 @@ Required:
 ```bash
 TREE_MODE=live
 MASTER_KEY=$(openssl rand -hex 32)       # back this up separately: lose it and every vault is lost
-SOLANA_RPC_URL=https://...               # a paid RPC (Helius, Triton, QuickNode); the public one rate-limits
+HELIUS_API_KEY=...                       # server key (or SOLANA_RPC_URL=https://... for another provider)
 PUBLIC_URL=https://your.domain
-NEXT_PUBLIC_SOLANA_RPC=https://...       # RPC the browser wallet uses to send the payment
+NEXT_PUBLIC_SOLANA_RPC=https://mainnet.helius-rpc.com/?api-key=<browser key>
+```
+
+`NEXT_PUBLIC_*` values are shipped to every visitor's browser. Use **two Helius keys**: a private one for
+the server (`HELIUS_API_KEY`) and a second one for the browser, restricted to your domain in the Helius
+dashboard (Access control → allowed domains). With Helius, priority fees follow its live
+`getPriorityFeeEstimate` ("High"), capped by `MAX_PRIORITY_FEE_MICROLAMPORTS`.
+
+```bash
 ```
 
 Optional (defaults in `lib/server/live/boot.ts`):
@@ -108,7 +116,9 @@ Optional (defaults in `lib/server/live/boot.ts`):
 | `CLAIM_MIN_SOL` | 0.001 | smallest per-coin payout |
 | `DORMANCY_HOURS` | 24 | |
 | `MAX_DEPTH` / `MAX_COINS_PER_TREE` | 14 / 300 | |
-| `PRIORITY_FEE_MICROLAMPORTS` | 50000 | |
+| `PRIORITY_FEE_MICROLAMPORTS` | 50000 | fixed fee, or the fallback when the Helius estimate fails |
+| `MAX_PRIORITY_FEE_MICROLAMPORTS` | 500000 | cap on the live estimate |
+| `DYNAMIC_PRIORITY_FEE` | 1 with Helius | `0` to always use the fixed fee |
 | `METADATA_PROVIDER` | `pumpfun` | `pumpfun` (pump.fun's IPFS uploader) or `self` (served from `/api/media`) |
 | `TRADE_FEED` | `pumpportal` | `none` to disable |
 | `MAX_DEV_BUY_SOL` | 5 | |
