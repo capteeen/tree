@@ -3,9 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * CORS for the engine's API when the site is served from another origin
  * (e.g. the site on Vercel, the engine on Railway). Set on the engine:
- *   ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+ *   ALLOWED_ORIGINS=https://www.treeterminal.fun,https://treeterminal.fun
  */
-const allowed = (process.env.ALLOWED_ORIGINS ?? '')
+const allowed = (process.env.ALLOWED_ORIGINS ?? 'https://www.treeterminal.fun,https://treeterminal.fun')
   .split(',')
   .map((s) => s.trim().replace(/\/$/, ''))
   .filter(Boolean);

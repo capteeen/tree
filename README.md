@@ -93,12 +93,12 @@ Required:
 TREE_MODE=live
 MASTER_KEY=$(openssl rand -hex 32)       # back this up separately: lose it and every vault is lost
 HELIUS_API_KEY=...                       # server key (or SOLANA_RPC_URL=https://... for another provider)
-PUBLIC_URL=https://your.domain
+PUBLIC_URL=https://engine.treeterminal.fun
 NEXT_PUBLIC_SOLANA_RPC=https://mainnet.helius-rpc.com/?api-key=<browser key>
 ```
 
 `NEXT_PUBLIC_*` values are shipped to every visitor's browser. Use **two Helius keys**: a private one for
-the server (`HELIUS_API_KEY`) and a second one for the browser, restricted to your domain in the Helius
+the server (`HELIUS_API_KEY`) and a second one for the browser, restricted to treeterminal.fun in the Helius
 dashboard (Access control → allowed domains). With Helius, priority fees follow its live
 `getPriorityFeeEstimate` ("High"), capped by `MAX_PRIORITY_FEE_MICROLAMPORTS`.
 

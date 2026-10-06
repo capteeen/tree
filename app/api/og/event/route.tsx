@@ -38,7 +38,7 @@ export async function GET(req: Request) {
             ])}
           </div>
         )}
-        <div style={{ marginTop: 26, fontSize: 13, color: '#6e5f4c', display: 'flex' }}>{`${coin ? `${coin.ticker} on TREE` : 'TREE'}${e.amount ? ` · ${fmtSol(e.amount)} SOL` : ''}`}</div>
+        <div style={{ marginTop: 26, fontSize: 13, color: '#6e5f4c', display: 'flex' }}>{`${coin ? `${coin.ticker} · treeterminal.fun` : 'treeterminal.fun'}${e.amount ? ` · ${fmtSol(e.amount)} SOL` : ''}`}</div>
       </div>
     </>,
   );

@@ -79,7 +79,7 @@ export default async function Image({ params }: { params: { ca: string } }) {
             ])}
           </div>
           <div style={{ marginTop: 36, fontSize: 18, color: '#a89c8c', display: 'flex' }}>
-            {depth > 1 ? `pays ${depth - 1} ancestor${depth === 2 ? '' : 's'} on every trade` : 'every coin below it pays it a cut'}
+            {depth > 1 ? `pays ${depth - 1} ancestor${depth === 2 ? '' : 's'} on every trade · treeterminal.fun` : 'every coin below it pays it a cut · treeterminal.fun'}
           </div>
         </div>
       </div>

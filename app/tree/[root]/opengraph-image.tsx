@@ -48,7 +48,7 @@ export default async function Image({ params }: { params: { root: string } }) {
             <C c="#a89c8c">fees in total</C>
           </Row>
         </div>
-        <div style={{ display: 'flex', marginTop: 30, fontSize: 12, lineHeight: 1.7, color: '#6e5f4c' }}>every coin below the root pays it a cut</div>
+        <div style={{ display: 'flex', marginTop: 30, fontSize: 12, lineHeight: 1.7, color: '#6e5f4c' }}>treeterminal.fun · every coin below the root pays it a cut</div>
       </div>
     </>,
   );

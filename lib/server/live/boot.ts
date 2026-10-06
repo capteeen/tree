@@ -35,7 +35,7 @@ export function liveConfig(mode: 'devchain' | 'live'): LiveConfig {
     maxPendingPerOwner: num('MAX_PENDING_PLANTS_PER_WALLET', 3),
     awaitingExpiryMs: num('PLANT_PAYMENT_EXPIRY_MIN', 30) * 60_000,
     maxLaunchAttempts: num('MAX_LAUNCH_ATTEMPTS', 5),
-    publicUrl: (process.env.PUBLIC_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, ''),
+    publicUrl: (process.env.PUBLIC_URL || (dev ? 'http://localhost:3000' : 'https://engine.treeterminal.fun')).replace(/\/$/, ''),
   };
 }
 
@@ -74,7 +74,7 @@ export function createLiveEngine(mode: 'devchain' | 'live'): LiveEngine {
 
   const metaProvider = process.env.METADATA_PROVIDER || (mode === 'live' ? 'pumpfun' : 'self');
   // PUBLIC_URL = this engine's address (serves media); SITE_URL = the website shown on pump.fun
-  const siteUrl = (process.env.SITE_URL || cfg.publicUrl).replace(/\/$/, '');
+  const siteUrl = (process.env.SITE_URL || (mode === 'live' ? 'https://www.treeterminal.fun' : cfg.publicUrl)).replace(/\/$/, '');
   const meta = metaProvider === 'pumpfun' ? new PumpFunIpfs(siteUrl) : new SelfHostedMetadata(store, cfg.publicUrl, siteUrl);
 
   let feed: PumpPortalFeed | null = null;

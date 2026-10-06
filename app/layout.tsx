@@ -7,8 +7,11 @@ import Footer from '@/components/Footer';
 import SoundNudge from '@/components/SoundNudge';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.treeterminal.fun'),
   title: 'TREE · a coin that grows a family tree',
+  applicationName: 'TREE',
+  openGraph: { siteName: 'TREE · treeterminal.fun', type: 'website', url: '/' },
+  twitter: { card: 'summary_large_image' },
   description:
     'Plant a coin. When its vault fills, it launches a child. Every child pays every ancestor. One tree, forever growing, on Solana.',
 };

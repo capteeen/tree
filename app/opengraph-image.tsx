@@ -40,7 +40,7 @@ export default async function Image() {
             <C c="#a89c8c">climbed to ancestors</C>
           </Row>
         </div>
-        <div style={{ display: 'flex', marginTop: 34, fontSize: 12, lineHeight: 1.7, color: '#6e5f4c' }}>every child pays every ancestor · pump.fun · solana</div>
+        <div style={{ display: 'flex', marginTop: 34, fontSize: 12, lineHeight: 1.7, color: '#6e5f4c' }}>treeterminal.fun · every child pays every ancestor</div>
       </div>
     </>,
   );
