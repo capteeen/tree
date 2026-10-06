@@ -186,22 +186,32 @@ export const useStore = create<State>()((set, get) => {
         if (localStorage.getItem('tree.theme') === 'light') theme = 'light';
       } catch {}
       set({ theme });
+      const attach = async () => {
+        const r = await fetch(api('/api/world'), { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+        if (!r.ok) throw new Error(String(r.status));
+        const snap = await r.json();
+        set({ world: snap.world, events: snap.events, ready: true, mode: 'server', version: get().version + 1 });
+        connect();
+        fetch(api('/api/config'), { cache: 'no-store' })
+          .then((c) => (c.ok ? c.json() : null))
+          .then((config) => config && set({ config }))
+          .catch(() => {});
+      };
       (async () => {
         try {
-          const ctrl = new AbortController();
-          const t = setTimeout(() => ctrl.abort(), 4000);
-          const r = await fetch(api('/api/world'), { cache: 'no-store', signal: ctrl.signal });
-          clearTimeout(t);
-          if (!r.ok) throw new Error(String(r.status));
-          const snap = await r.json();
-          set({ world: snap.world, events: snap.events, ready: true, mode: 'server', version: 1 });
-          connect();
-          fetch(api('/api/config'), { cache: 'no-store' })
-            .then((c) => (c.ok ? c.json() : null))
-            .then((config) => config && set({ config }))
-            .catch(() => {});
+          await attach();
         } catch {
+          // engine unreachable: run locally for now and keep trying to attach
           startLocal();
+          const retry = async () => {
+            if (get().mode === 'server') return;
+            try {
+              await attach();
+            } catch {
+              setTimeout(retry, 10_000);
+            }
+          };
+          setTimeout(retry, 10_000);
         }
       })();
     },

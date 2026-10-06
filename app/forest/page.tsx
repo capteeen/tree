@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { useWorld } from '@/lib/store';
+import { useStore, useWorld } from '@/lib/store';
 import { age, fmtSol, shortCa } from '@/lib/format';
 import Tree2D from '@/components/Tree2D';
 import Loading from '@/components/Loading';
@@ -18,9 +18,11 @@ type SortKey = (typeof SORTS)[number]['k'];
 
 export default function ForestPage() {
   const { world, version, ready } = useWorld();
+  // only real (mainnet) trees are listed; demo and test trees stay hidden
+  const live = useStore((s) => s.config?.mode === 'live');
   const [sort, setSort] = useState<SortKey>('new');
   const trees = useMemo(() => {
-    const list = Object.values(world.trees);
+    const list = live ? Object.values(world.trees) : [];
     const f: Record<SortKey, (a: (typeof list)[0], b: (typeof list)[0]) => number> = {
       new: (a, b) => b.plantedAt - a.plantedAt,
       fees: (a, b) => b.totalFees - a.totalFees,
@@ -30,7 +32,7 @@ export default function ForestPage() {
     };
     return list.sort(f[sort]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, version, sort]);
+  }, [world, version, sort, live]);
 
   if (!ready) return <Loading />;
   return (
@@ -49,6 +51,15 @@ export default function ForestPage() {
         </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {!trees.length && (
+          <div className="px-box col-span-full p-8 text-center">
+            <div className="font-pixel text-xs">NO TREES PLANTED YET</div>
+            <p className="mt-2 text-xl text-muted">Every tree that gets planted will show up here, newest first.</p>
+            <Link href="/plant" className="px-btn mt-4 inline-block text-[10px]">
+              PLANT THE FIRST ROOT
+            </Link>
+          </div>
+        )}
         {trees.map((t) => {
           const root = world.coins[t.rootCa];
           return (
