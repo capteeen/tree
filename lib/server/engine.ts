@@ -82,21 +82,38 @@ export function currentMode(): Mode {
   return m === 'live' || m === 'devchain' ? m : 'sim';
 }
 
-const g = globalThis as unknown as { __treeEngine?: Engine };
+const g = globalThis as unknown as { __treeEngine?: Engine; __treeEngineError?: string };
+
+/** Why the engine failed to start, if it did (shown by /api/config to make setup mistakes obvious). */
+export const engineError = () => g.__treeEngineError;
 
 /** The one engine this server process runs. Survives HMR in dev. */
 export function engine(): Engine {
   if (!g.__treeEngine) {
     const mode = currentMode();
-    if (mode === 'sim') {
-      const { SimEngine } = require('./simEngine') as typeof import('./simEngine');
-      g.__treeEngine = new SimEngine();
-    } else {
-      const { createLiveEngine } = require('./live/boot') as typeof import('./live/boot');
-      g.__treeEngine = createLiveEngine(mode);
+    try {
+      g.__treeEngine = boot(mode);
+      g.__treeEngineError = undefined;
+    } catch (e) {
+      const msg = (e instanceof Error ? e.message : String(e)).split('\n')[0];
+      g.__treeEngineError = msg;
+      console.error(`[tree] engine failed to start (TREE_MODE=${mode}): ${msg}`);
+      throw e;
     }
   }
   return g.__treeEngine!;
+}
+
+function boot(mode: Mode): Engine {
+  {
+    if (mode === 'sim') {
+      const { SimEngine } = require('./simEngine') as typeof import('./simEngine');
+      return new SimEngine();
+    } else {
+      const { createLiveEngine } = require('./live/boot') as typeof import('./live/boot');
+      return createLiveEngine(mode);
+    }
+  }
 }
 
 export const hub = () => engine().hub;
