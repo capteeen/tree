@@ -119,7 +119,11 @@ function PlantForm() {
     };
     try {
       let ca: string;
-      if (mode === 'local') ca = await useStore.getState().plant(input);
+      if (mode === 'local') {
+        if (process.env.NEXT_PUBLIC_DEMO !== '1')
+          throw new Error('The forest is offline right now, so planting is paused. Try again in a minute.');
+        ca = await useStore.getState().plant(input);
+      }
       else {
         ca = await plantFlow(input, {
           onStep: setStep,
@@ -167,6 +171,11 @@ function PlantForm() {
           </button>
         </div>
 
+        {ready && mode === 'local' && process.env.NEXT_PUBLIC_DEMO !== '1' && (
+          <p className="mb-3 bg-panel2 p-2 text-lg leading-tight text-blossom">
+            The forest is offline right now, so planting is paused. It reconnects on its own; try again in a minute.
+          </p>
+        )}
         <div className="flex gap-3">
           <label className="cursor-pointer" title="Upload image">
             <CoinSprite image={image} depth={1} size={88} className="outline outline-4 outline-[var(--line)]" />

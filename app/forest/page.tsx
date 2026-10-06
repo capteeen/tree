@@ -2,12 +2,13 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useWorld } from '@/lib/store';
-import { age, fmtSol } from '@/lib/format';
+import { age, fmtSol, shortCa } from '@/lib/format';
 import Tree2D from '@/components/Tree2D';
 import Loading from '@/components/Loading';
 import Num, { ev } from '@/components/Num';
 
 const SORTS = [
+  { k: 'new', label: 'NEWEST' },
   { k: 'fees', label: 'TOTAL FEES' },
   { k: 'coins', label: 'COINS' },
   { k: 'depth', label: 'DEPTH' },
@@ -17,10 +18,11 @@ type SortKey = (typeof SORTS)[number]['k'];
 
 export default function ForestPage() {
   const { world, version, ready } = useWorld();
-  const [sort, setSort] = useState<SortKey>('fees');
+  const [sort, setSort] = useState<SortKey>('new');
   const trees = useMemo(() => {
     const list = Object.values(world.trees);
     const f: Record<SortKey, (a: (typeof list)[0], b: (typeof list)[0]) => number> = {
+      new: (a, b) => b.plantedAt - a.plantedAt,
       fees: (a, b) => b.totalFees - a.totalFees,
       coins: (a, b) => b.coins - a.coins,
       depth: (a, b) => b.maxDepth - a.maxDepth,
@@ -58,7 +60,10 @@ export default function ForestPage() {
                 <Link href={`/tree/${t.rootCa}`} className="truncate font-pixel text-[10px] text-leaf hover:text-sap">
                   {root.ticker}
                 </Link>
-                <span className="text-lg text-muted">{age(t.plantedAt)} old</span>
+                <span className="text-lg text-muted">planted {age(t.plantedAt)} ago</span>
+              </div>
+              <div className="mb-1 truncate text-base text-muted" title={root.ownerWallet}>
+                by {shortCa(root.ownerWallet)}
               </div>
               <div className="grid grid-cols-3 gap-1 text-lg leading-tight">
                 <div>

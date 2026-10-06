@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWorld } from '@/lib/store';
 import { treeOrder } from '@/lib/sim';
-import { fmtSol, age } from '@/lib/format';
+import { fmtSol, age, shortCa } from '@/lib/format';
 import { leafColor, PALETTES } from '@/lib/season';
 import { useStore } from '@/lib/store';
 import { onEvent } from '@/lib/bus';
@@ -64,6 +64,9 @@ export default function TreePageView({ rootCa }: { rootCa: string }) {
         <div className="pointer-events-none absolute left-0 top-0 p-3">
           <div className="pointer-events-auto bg-[#1b1815]/80 p-2 text-[#f4f4f2]">
             <div className="font-pixel text-xs text-leaf">{root.ticker} TREE</div>
+            <div className="text-base leading-tight text-[#a89c8c]" title={root.ownerWallet}>
+              planted by {shortCa(root.ownerWallet)} · {age(root.bornAt)} ago
+            </div>
             <div className="text-lg leading-tight">
               <Num href={ev({ root: rootCa, kind: 'sprout' })}>{tree.coins} coins</Num> ·{' '}
               <Num href={ev({ root: rootCa, kind: 'sprout', depth: String(tree.maxDepth) })}>depth {tree.maxDepth}</Num> ·{' '}
