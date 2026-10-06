@@ -282,8 +282,10 @@ function PlantForm() {
           {realMoney
             ? 'Real launch on Solana mainnet. Your SOL pays for the coin; its vault becomes the pump.fun creator.'
             : config?.mode === 'devchain'
-              ? 'Devchain: the full backend runs against a simulated chain. No real SOL moves.'
-              : 'Simulator: the launch is simulated. No transaction is sent.'}
+              ? 'Test mode: the engine is running on a simulated chain. No real SOL moves yet.'
+              : mode === 'local'
+                ? 'Not connected to the engine. Launches are paused until it reconnects.'
+                : 'Demo mode: this engine is a simulator, so the launch is pretend. Set TREE_MODE=live on the engine for real launches.'}
         </p>
       </form>
     </div>

@@ -11,7 +11,7 @@ const allowed = (process.env.ALLOWED_ORIGINS ?? 'https://www.treeterminal.fun,ht
   .filter(Boolean);
 
 /** Set on the frontend (Vercel) build: engine API calls belong to the engine, not here. */
-const ENGINE = (process.env.NEXT_PUBLIC_ENGINE_URL ?? '').replace(/\/$/, '');
+const ENGINE = (process.env.NEXT_PUBLIC_ENGINE_URL || (process.env.VERCEL ? 'https://engine.treeterminal.fun' : '')).replace(/\/$/, '');
 const ENGINE_ROUTES = /^\/api\/(world|events|config|plant|claim|media)(\/|$)/;
 
 export function middleware(req: NextRequest) {

@@ -12,7 +12,7 @@ let cache: { at: number; world: World; events: TreeEvent[] } | null = null;
  * for 15 s, so the frontend never starts an engine of its own.
  */
 export async function serverWorld(): Promise<{ world: World; events: TreeEvent[] }> {
-  const remote = (process.env.ENGINE_URL || process.env.NEXT_PUBLIC_ENGINE_URL || '').replace(/\/$/, '');
+  const remote = (process.env.ENGINE_URL || process.env.NEXT_PUBLIC_ENGINE_URL || (process.env.VERCEL ? 'https://engine.treeterminal.fun' : '')).replace(/\/$/, '');
   if (!remote) {
     const h = hub();
     return { world: h.world, events: h.events };
