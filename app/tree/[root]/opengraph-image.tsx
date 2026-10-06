@@ -1,3 +1,4 @@
+import { LOGO_DATA_URL } from '@/lib/brandLogo';
 import { serverWorld } from '@/lib/server/world';
 import { ogResponse, TreePicture } from '@/lib/server/og';
 import { fmtSol } from '@/lib/format';
@@ -25,7 +26,11 @@ export default async function Image({ params }: { params: { root: string } }) {
         <TreePicture world={world} rootCa={root.ca} w={150} h={140} scale={4} highlight={deepest ? new Set([deepest.ca]) : undefined} />
       </div>
       <div style={{ width: 600, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: 48 }}>
-        <div style={{ display: 'flex', fontSize: 20, color: '#7bd389' }}>TREE</div>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_DATA_URL} width={56} height={56} alt="" style={{ borderRadius: 6, marginRight: 14 }} />
+          <div style={{ display: 'flex', fontSize: 20, color: '#7bd389' }}>TREE</div>
+        </div>
         <div style={{ display: 'flex', fontSize: root.ticker.length > 8 ? 40 : 56, marginTop: 18 }}>{root.ticker}</div>
         <div style={{ display: 'flex', flexDirection: 'column', marginTop: 22, fontSize: 14, color: '#a89c8c' }}>
           <Row>

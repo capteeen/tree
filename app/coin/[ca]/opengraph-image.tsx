@@ -1,3 +1,4 @@
+import { LOGO_DATA_URL } from '@/lib/brandLogo';
 import { ImageResponse } from 'next/og';
 import { lineage } from '@/lib/sim';
 import { serverWorld } from '@/lib/server/world';
@@ -65,7 +66,11 @@ export default async function Image({ params }: { params: { ca: string } }) {
           <div style={{ position: 'absolute', left: 0, right: 0, top: 26 * B + 30, height: 40, background: '#4e9a5a', display: 'flex' }} />
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: 56 }}>
-          <div style={{ fontSize: 22, color: '#7bd389', display: 'flex' }}>TREE</div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGO_DATA_URL} width={56} height={56} alt="" style={{ borderRadius: 6, marginRight: 14 }} />
+            <div style={{ fontSize: 22, color: '#7bd389', display: 'flex' }}>TREE</div>
+          </div>
           <div style={{ fontSize: ticker.length > 9 ? 52 : 72, marginTop: 24, display: 'flex' }}>{ticker}</div>
           <div style={{ display: 'flex', marginTop: 28 }}>
             <div style={{ background: '#f5a623', color: BG, fontSize: 26, padding: '10px 16px', display: 'flex' }}>DEPTH {depth}</div>

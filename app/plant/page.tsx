@@ -21,6 +21,7 @@ const STEPS: { k: PlantStep; label: string }[] = [
 ];
 import { fmtSol } from '@/lib/format';
 import CoinSprite from '@/components/CoinSprite';
+import Logo from '@/components/Logo';
 
 const NETWORK_FEE = 0.000105;
 
@@ -157,7 +158,10 @@ function PlantForm() {
         className="px-box max-h-[92svh] w-full max-w-lg overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] sm:p-6"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="font-pixel text-sm text-leaf">PLANT A ROOT</h1>
+          <h1 className="flex items-center gap-2 font-pixel text-sm text-leaf">
+            <Logo size={28} />
+            PLANT A ROOT
+          </h1>
           <button type="button" onClick={close} className="font-pixel text-xs text-muted hover:text-ink" aria-label="Close">
             ✕
           </button>

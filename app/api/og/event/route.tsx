@@ -1,3 +1,4 @@
+import { LOGO_DATA_URL } from '@/lib/brandLogo';
 import { serverWorld } from '@/lib/server/world';
 import { ogResponse, PixelArrow, TreePicture } from '@/lib/server/og';
 import { fmtSol } from '@/lib/format';
@@ -24,6 +25,8 @@ export async function GET(req: Request) {
       </div>
       <div style={{ width: 680, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: 48 }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_DATA_URL} width={48} height={48} alt="" style={{ borderRadius: 6, marginRight: 16 }} />
           <div style={{ display: 'flex', background: color[e.kind] ?? '#f5a623', color: '#1b1815', fontSize: 16, padding: '8px 12px' }}>{e.kind.toUpperCase()}</div>
           <div style={{ display: 'flex', fontSize: 14, color: '#a89c8c', marginLeft: 16 }}>DEPTH {e.depth}</div>
         </div>

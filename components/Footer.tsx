@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
+import Logo from './Logo';
 
 export default function Footer() {
   const mode = useStore((s) => s.mode);
@@ -8,6 +9,10 @@ export default function Footer() {
   return (
     <footer className="mt-16 border-t-4 border-[var(--line)] pb-[calc(env(safe-area-inset-bottom)+16px)]">
       <div className="mx-auto max-w-7xl px-3 py-6 text-lg leading-tight text-muted">
+        <div className="mb-3 flex items-center gap-2">
+          <Logo size={40} />
+          <span className="font-pixel text-xs text-leaf">TREE</span>
+        </div>
         <p className="text-ink">Coins launch on pump.fun (Solana). A meme, not an investment. Crypto is risky. Only use what you can afford to lose.</p>
         <p className="mt-2">
           {engineMode === 'live'

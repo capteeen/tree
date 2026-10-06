@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import Search from './Search';
+import Logo from './Logo';
 
 const NAV = [
   { href: '/forest', label: 'FOREST' },
@@ -14,20 +15,6 @@ const NAV = [
 
 const SEASON_ICON: Record<string, string> = { spring: '🌸', summer: '☀', autumn: '🍂', winter: '❄' };
 
-function Logo() {
-  return (
-    <svg viewBox="0 0 12 12" width="28" height="28" shapeRendering="crispEdges" aria-hidden>
-      <rect x="4" y="1" width="4" height="1" fill="#7bd389" />
-      <rect x="2" y="2" width="8" height="3" fill="#7bd389" />
-      <rect x="3" y="3" width="1" height="1" fill="#ff8fb1" />
-      <rect x="8" y="2" width="1" height="1" fill="#f5a623" />
-      <rect x="3" y="5" width="6" height="1" fill="#4e9a5a" />
-      <rect x="5" y="6" width="2" height="4" fill="#8b5a2b" />
-      <rect x="6" y="7" width="1" height="1" fill="#f5a623" />
-      <rect x="3" y="10" width="6" height="1" fill="#5a3a1e" />
-    </svg>
-  );
-}
 
 export default function Header() {
   const path = usePathname();
@@ -43,7 +30,7 @@ export default function Header() {
     <header className="sticky top-0 z-40 bg-bg/95 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2 sm:gap-3">
         <Link href="/" className="flex items-center gap-2">
-          <Logo />
+          <Logo size={30} />
           <span className="font-pixel text-sm text-leaf sm:text-base">TREE</span>
         </Link>
         <nav className="no-scrollbar flex min-w-0 items-center gap-1 overflow-x-auto sm:gap-2">
