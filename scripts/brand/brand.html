@@ -1,0 +1,69 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#1b1815}
+canvas{image-rendering:pixelated;display:block}
+#banner{position:relative;width:1500px;height:500px;overflow:hidden}
+#banner canvas{position:absolute;inset:0;width:1500px;height:500px}
+.t{position:absolute;font-family:'Press Start 2P',monospace;color:#f4f4f2;-webkit-font-smoothing:none}
+#icon{width:400px;height:400px}
+#icon canvas{width:400px;height:400px}
+</style></head><body>
+<div id="banner"><canvas id="b" width="300" height="100"></canvas>
+  <div class="t" style="left:470px;top:118px;font-size:84px;color:#7bd389;text-shadow:6px 6px 0 #0d0b09">TREE</div>
+  <div class="t" style="left:474px;top:236px;font-size:22px;line-height:1.7">A COIN THAT GROWS<br><span style="color:#7bd389">A FAMILY TREE</span></div>
+  <div class="t" style="left:474px;top:330px;font-size:13px;color:#f5a623;line-height:2">EVERY CHILD PAYS EVERY ANCESTOR</div>
+  <div id="labels"></div>
+  <div class="t" style="left:474px;top:362px;font-size:11px;color:#a89c8c">PUMP.FUN · SOLANA</div>
+</div>
+<div id="icon"><canvas id="i" width="80" height="80"></canvas></div>
+<script>
+const P={bg:'#1b1815',bark:'#8b5a2b',barkD:'#6e4420',barkL:'#a8743d',leaf:'#7bd389',leafD:'#4e9a5a',leafL:'#a6e8b0',pink:'#ff8fb1',pinkD:'#c95a7e',gold:'#f5a623',goldL:'#ffd36b',sap:'#fff3c4',grass:'#4e9a5a',grassL:'#6fb87a',dirt:'#5a3a1e',dirtD:'#3e2814',ink:'#0d0b09'};
+function rng(s){return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296}}
+function px(c,x,y,col,w=1,h=1){c.fillStyle=col;c.fillRect(Math.round(x),Math.round(y),w,h)}
+function line(c,x0,y0,x1,y1,w0,w1,col,colD){const n=Math.ceil(Math.hypot(x1-x0,y1-y0));for(let i=0;i<=n;i++){const t=i/n,w=Math.max(1,Math.round(w0+(w1-w0)*t)),x=x0+(x1-x0)*t-w/2,y=y0+(y1-y0)*t-w/2;px(c,x,y,col,w,w);if(w>2)px(c,x+w-1,y,colD,1,w)}}
+// build a branching tree; returns segments + tips
+function grow(x,y,ang,len,w,depth,r,segs,tips,maxD){const x1=x+Math.cos(ang)*len,y1=y-Math.sin(ang)*len;segs.push({x0:x,y0:y,x1,y1,w0:w,w1:Math.max(1,w*0.7),d:depth});if(depth>=maxD){tips.push({x:x1,y:y1,d:depth});return}
+ const k=depth===0?3:2+(r()<0.35?1:0);for(let i=0;i<k;i++){const off=(i-(k-1)/2)*(0.62+r()*0.25)+(r()-0.5)*0.25;grow(x+(x1-x)*(0.8+r()*0.15),y+(y1-y)*(0.8+r()*0.15),ang+off,len*(0.68+r()*0.12),Math.max(1,w*0.62),depth+1,r,segs,tips,maxD)}
+ if(depth>0&&r()<0.5)tips.push({x:x1,y:y1,d:depth})}
+function blob(c,x,y,rad,r,cols){for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){const d=Math.hypot(dx,dy*1.15);if(d>rad+r()*0.8-0.4)continue;const shade=dy<-rad*0.3&&dx<rad*0.4?cols[2]:d>rad-1.2||dy>rad*0.4?cols[1]:cols[0];px(c,x+dx,y+dy,shade)}}
+function drawTree(c,cx,base,size,seed,maxD,glowPath,leafK=1){const r=rng(seed),segs=[],tips=[];grow(cx,base,Math.PI/2+(r()-0.5)*0.08,size,Math.max(3,size/5),0,r,segs,tips,maxD);
+ // outline pass then wood
+ for(const s of segs)line(c,s.x0,s.y0,s.x1,s.y1,s.w0+2,s.w1+2,P.ink,P.ink);
+ for(const s of segs)line(c,s.x0,s.y0,s.x1,s.y1,s.w0,s.w1,P.bark,P.barkD);
+ const cols=[[P.leaf,P.leafD,P.leafL],[P.pink,P.pinkD,'#ffc2d6'],[P.gold,'#c98410',P.goldL]];
+ tips.sort((a,b)=>b.y-a.y);
+ const rA=rng(seed*7+1),rB=rng(seed*7+1);
+ for(const t of tips){const rad=Math.max(2,Math.round((size/7-t.d*0.35+rA()*1.5)*leafK));blob(c,t.x+0.5,t.y,rad+1,rng(t.x*31+t.y),[P.ink,P.ink,P.ink]);}
+ for(const t of tips){const rad=Math.max(2,Math.round((size/7-t.d*0.35+rB()*1.5)*leafK));const v=rB();const ci=v<0.62?0:v<0.82?1:2;blob(c,t.x+0.5,t.y,rad,rng(t.x*31+t.y),cols[ci])}
+ // the sap: a glowing path from the deepest tip down to the root
+ if(glowPath){const deep=segs.filter(s=>s.d===maxD).sort((a,b)=>a.x1-b.x1)[Math.floor(segs.filter(s=>s.d===maxD).length*0.7)];let cur=deep;const chain=[cur];while(cur.d>0){cur=segs.filter(s=>s.d===cur.d-1).sort((a,b)=>Math.hypot(a.x1-cur.x0,a.y1-cur.y0)-Math.hypot(b.x1-cur.x0,b.y1-cur.y0))[0];chain.push(cur)}
+  for(const s of chain)line(c,s.x0,s.y0,s.x1,s.y1,Math.max(1,s.w1*0.5),Math.max(1,s.w1*0.45),P.gold,P.gold);
+  const drops=[];for(const s of chain){for(let k=0;k<2;k++){const t=0.25+k*0.5;drops.push([s.x0+(s.x1-s.x0)*t,s.y0+(s.y1-s.y0)*t])}}
+  for(const [x,y] of drops){c.fillStyle='rgba(255,211,107,0.22)';c.fillRect(Math.round(x)-1,Math.round(y)-1,3,3);px(c,x-1,y-1,P.sap,2,2)}
+  return {chain,deep}}
+ return {}}
+function stars(c,w,h,n,seed){const r=rng(seed);for(let i=0;i<n;i++){const x=r()*w,y=r()*h*0.75;px(c,x,y,r()<0.15?P.goldL:'#f4f4f2');if(r()<0.12){px(c,x-1,y,'#6e6a72');px(c,x+1,y,'#6e6a72');px(c,x,y-1,'#6e6a72');px(c,x,y+1,'#6e6a72')}}}
+function island(c,cx,y,w){for(let x=-w;x<=w;x++){const e=Math.abs(x)/w;if(e>1)continue;const top=y+Math.round(e*e*2);px(c,cx+x,top,x%5===0?P.grassL:P.grass,1,2);px(c,cx+x,top+2,P.dirt,1,Math.round((1-e*e)*7)+1);px(c,cx+x,top+2+Math.round((1-e*e)*7),P.dirtD,1,Math.round((1-e)*4))}
+ for(let k=0;k<6;k++){const r=rng(k+9);px(c,cx-w*0.7+r()*w*1.4,y-1,[P.pink,P.goldL,'#f4f4f2'][k%3])}}
+
+// ---------- banner (300x100 → 1500x500)
+{const c=document.getElementById('b').getContext('2d');
+ const bands=['#0f0d14','#120f16','#151217','#181417','#1b1815','#1e1916'];bands.forEach((b,i)=>{c.fillStyle=b;c.fillRect(0,Math.floor(i*100/bands.length),300,Math.ceil(100/bands.length))});
+ stars(c,300,100,70,7);
+ // moon
+ // a small tree far left (sits behind the avatar), the hero tree right
+ island(c,48,92,26);drawTree(c,48,92,17,11,3,false);
+ island(c,232,90,44);const g=drawTree(c,232,90,26,4242,4,true);
+ if(g.chain){const ch=g.chain,L=document.getElementById('labels');
+  const put=(x,y,t,col,fs)=>{const d=document.createElement('div');d.className='t';d.style.cssText=`left:${x*5}px;top:${y*5}px;font-size:${fs}px;color:${col};text-shadow:3px 3px 0 #0d0b09`;d.textContent=t;L.appendChild(d)};
+  put(ch[1].x0+5,ch[1].y0-3,'+0.012','#ffd36b',14);put(ch[2].x0+5,ch[2].y0-2,'+0.006','#ffd36b',14);
+  const root=ch[ch.length-1];put(root.x0+6,root.y0-12,'ROOT +0.003','#f4f4f2',14)}
+}
+// ---------- icon (80x80 → 400x400), centered for a circular crop
+{const c=document.getElementById('i').getContext('2d');
+ const bands=['#141119','#17131a','#1a1618','#1b1815'];bands.forEach((b,i)=>{c.fillStyle=b;c.fillRect(0,i*20,80,20)});
+ stars(c,80,80,14,3);
+ island(c,40,68,24);drawTree(c,40,68,20,909,3,true,1.45);
+}
+</script></body></html>
