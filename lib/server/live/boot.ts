@@ -73,7 +73,9 @@ export function createLiveEngine(mode: 'devchain' | 'live'): LiveEngine {
   } else chain = new FakeChain();
 
   const metaProvider = process.env.METADATA_PROVIDER || (mode === 'live' ? 'pumpfun' : 'self');
-  const meta = metaProvider === 'pumpfun' ? new PumpFunIpfs(cfg.publicUrl) : new SelfHostedMetadata(store, cfg.publicUrl);
+  // PUBLIC_URL = this engine's address (serves media); SITE_URL = the website shown on pump.fun
+  const siteUrl = (process.env.SITE_URL || cfg.publicUrl).replace(/\/$/, '');
+  const meta = metaProvider === 'pumpfun' ? new PumpFunIpfs(siteUrl) : new SelfHostedMetadata(store, cfg.publicUrl, siteUrl);
 
   let feed: PumpPortalFeed | null = null;
   const engine = new LiveEngine({

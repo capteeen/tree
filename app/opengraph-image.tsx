@@ -1,4 +1,4 @@
-import { hub } from '@/lib/server/engine';
+import { serverWorld } from '@/lib/server/world';
 import { ogResponse, TreePicture } from '@/lib/server/og';
 import { fmtSol } from '@/lib/format';
 
@@ -12,7 +12,7 @@ const Row = ({ children }: { children: React.ReactNode }) => <div style={{ displ
 const C = ({ c, children }: { c: string; children: React.ReactNode }) => <div style={{ display: 'flex', color: c, marginRight: 10, whiteSpace: 'nowrap', lineHeight: 1.7 }}>{children}</div>;
 
 export default async function Image() {
-  const { world } = hub();
+  const { world } = await serverWorld();
   const best = Object.values(world.trees).sort((a, b) => b.totalFees - a.totalFees)[0];
   const s = world.stats;
   return ogResponse(

@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import type { Ca, TreeEvent } from './types';
 import { emit } from './bus';
+import { api } from './apiBase';
 import { liveRng } from './rng';
 import { SEASONS, seasonOf, type Season } from './season';
 import { setMuted as setSoundMuted } from './sound';
@@ -128,7 +129,7 @@ export const useStore = create<State>()((set, get) => {
   let es: EventSource | null = null;
   const connect = () => {
     if (es) es.close();
-    es = new EventSource('/api/events');
+    es = new EventSource(api('/api/events'));
     es.onopen = () => set({ connected: true });
     es.onmessage = (e) => {
       try {
@@ -148,7 +149,7 @@ export const useStore = create<State>()((set, get) => {
     resyncTimer = setTimeout(async () => {
       resyncTimer = null;
       try {
-        const r = await fetch('/api/world', { cache: 'no-store' });
+        const r = await fetch(api('/api/world'), { cache: 'no-store' });
         if (!r.ok) return;
         const snap = await r.json();
         const known = new Set(get().events.map((e) => e.id));
@@ -189,13 +190,13 @@ export const useStore = create<State>()((set, get) => {
         try {
           const ctrl = new AbortController();
           const t = setTimeout(() => ctrl.abort(), 4000);
-          const r = await fetch('/api/world', { cache: 'no-store', signal: ctrl.signal });
+          const r = await fetch(api('/api/world'), { cache: 'no-store', signal: ctrl.signal });
           clearTimeout(t);
           if (!r.ok) throw new Error(String(r.status));
           const snap = await r.json();
           set({ world: snap.world, events: snap.events, ready: true, mode: 'server', version: 1 });
           connect();
-          fetch('/api/config', { cache: 'no-store' })
+          fetch(api('/api/config'), { cache: 'no-store' })
             .then((c) => (c.ok ? c.json() : null))
             .then((config) => config && set({ config }))
             .catch(() => {});

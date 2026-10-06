@@ -48,13 +48,13 @@ async function fetchMedia(url: string): Promise<Media> {
  * reachable while this site is up, so prefer the pump.fun IPFS store.
  */
 export class SelfHostedMetadata implements MetadataStore {
-  constructor(private store: Store, private publicUrl: string) {}
+  constructor(private store: Store, private publicUrl: string, private siteUrl = publicUrl) {}
 
   async put(m: MetadataInput) {
     const id = randomBytes(10).toString('hex');
     this.store.putMedia(`${id}.img`, m.image.mime, m.image.bytes);
     const imageUrl = `${this.publicUrl}/api/media/${id}.img`;
-    const json = { name: m.name, symbol: m.symbol, description: m.description, image: imageUrl, showName: true, telegram: m.telegram, website: this.publicUrl };
+    const json = { name: m.name, symbol: m.symbol, description: m.description, image: imageUrl, showName: true, telegram: m.telegram, website: this.siteUrl };
     this.store.putMedia(`${id}.json`, 'application/json', Buffer.from(JSON.stringify(json)));
     return { uri: `${this.publicUrl}/api/media/${id}.json`, imageUrl };
   }

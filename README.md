@@ -123,7 +123,7 @@ Optional (defaults in `lib/server/live/boot.ts`):
 | `TRADE_FEED` | `pumpportal` | `none` to disable |
 | `MAX_DEV_BUY_SOL` | 5 | |
 
-**Deployment.** The engine is a long-running process with background jobs, a websocket and a SQLite
+**Deployment** (step by step: [DEPLOY.md](DEPLOY.md), site on Vercel + engine on Railway). The engine is a long-running process with background jobs, a websocket and a SQLite
 file, so it needs **one** always-on Node server (Railway, Fly, Render, a VPS) with a persistent volume,
 running `npm run build && npm start`. It will not work on serverless (Vercel functions), and you must not
 run two instances against the same database: both would sign from the same vaults.

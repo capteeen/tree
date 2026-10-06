@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
 import EventsExplorer from '@/components/EventsExplorer';
-import { hub } from '@/lib/server/engine';
+import { serverWorld } from '@/lib/server/world';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata({ searchParams }: { searchParams: { id?: string } }): Metadata {
+export async function generateMetadata({ searchParams }: { searchParams: { id?: string } }): Promise<Metadata> {
   const id = searchParams.id;
-  const e = id ? hub().events.find((x) => x.id === id) : undefined;
+  const e = id ? (await serverWorld()).events.find((x) => x.id === id) : undefined;
   if (!e) return { title: 'Events · TREE' };
   const img = `/api/og/event?id=${encodeURIComponent(e.id)}`;
   return {

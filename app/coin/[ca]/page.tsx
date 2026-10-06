@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
 import CoinView from '@/components/CoinView';
 import { lineage } from '@/lib/sim';
-import { hub } from '@/lib/server/engine';
+import { serverWorld } from '@/lib/server/world';
 
 export const dynamic = 'force-dynamic';
 
-export function generateMetadata({ params }: { params: { ca: string } }): Metadata {
-  const w = hub().world;
+export async function generateMetadata({ params }: { params: { ca: string } }): Promise<Metadata> {
+  const w = (await serverWorld()).world;
   const c = w.coins[params.ca];
   if (!c) return { title: 'Coin · TREE' };
   const path = lineage(w, c.ca)

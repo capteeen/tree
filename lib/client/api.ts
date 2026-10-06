@@ -1,10 +1,11 @@
 'use client';
+import { api } from '@/lib/apiBase';
 import type { PlantRequest, PlantStatus, PreparedPlant, PublicConfig } from '@/lib/server/engine';
 
 export type { PlantRequest, PlantStatus, PreparedPlant, PublicConfig };
 
-async function call<T>(url: string, body?: unknown): Promise<T> {
-  const r = await fetch(url, body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+async function call<T>(path: string, body?: unknown): Promise<T> {
+  const r = await fetch(api(path), body === undefined ? { cache: 'no-store' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j?.error ?? `request failed (${r.status})`);
   return j as T;
