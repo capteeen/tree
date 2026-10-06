@@ -1,0 +1,13 @@
+# Railway build: Node 22 (better-sqlite3 ships prebuilt binaries for it; Node 18 forces a
+# source compile that needs Python). python3 is kept as a fallback for any native module.
+[phases.setup]
+nixPkgs = ["nodejs_22", "python3", "gcc", "gnumake"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"
