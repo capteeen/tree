@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
-import { sim } from '@/lib/server/sim';
+import { engine } from '@/lib/server/engine';
+import { handle, limited, tooMany } from '@/lib/server/http';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
+/** Pays the wallet everything its coins have received from below. Funds only ever go to the owner. */
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
-  const wallet = String(body?.wallet ?? '');
-  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) return NextResponse.json({ error: 'invalid wallet' }, { status: 400 });
-  // TODO(phase2): the wallet signs a claim transaction; the server never pays out on a bare POST.
-  return NextResponse.json({ amount: sim().claim(wallet) });
+  if (limited(req, 'claim', 6, 60_000)) return tooMany();
+  const body = (await req.json().catch(() => ({}))) as { wallet?: string; message?: string; signature?: string };
+  return handle(() => engine().claim(String(body.wallet ?? ''), String(body.message ?? ''), body.signature ? String(body.signature) : undefined));
 }

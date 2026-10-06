@@ -47,7 +47,7 @@ export interface Tree {
   plantedAt: number;
 }
 
-export type EventKind = 'sprout' | 'climb' | 'trade' | 'death' | 'revive' | 'claim';
+export type EventKind = 'sprout' | 'climb' | 'trade' | 'swap' | 'death' | 'revive' | 'claim';
 
 export interface TreeEvent {
   id: string;
@@ -67,6 +67,11 @@ export interface TreeEvent {
   flush?: boolean;
   /** Sprout bonus applied (coin younger than 1h kept 75%). */
   bonus?: boolean;
+  /** On-chain transaction signature(s) behind this event (live mode). */
+  sig?: string;
+  /** Swaps: SOL traded, and the trader. */
+  volume?: number;
+  trader?: string;
   text: string;
   at: number;
 }

@@ -75,7 +75,8 @@ export default function CoinSprite({ image, depth, size = 64, className = '' }: 
   return (
     <span className={`relative inline-block shrink-0 overflow-hidden bg-[#2a2420] ${className}`} style={{ width: size, height: size }}>
       {body}
-      {depth !== undefined && (
+      {/* children launched by a vault have the badge baked into their real image */}
+      {depth !== undefined && (image.startsWith('sprite:') || depth === 1) && (
         <span
           className="absolute bottom-0 right-0 bg-sap px-[3px] py-[2px] font-pixel leading-none text-[#1b1815]"
           style={{ fontSize: Math.max(6, Math.round(size / 7)) }}

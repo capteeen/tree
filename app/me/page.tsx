@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { claimFlow } from '@/lib/client/api';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import WalletGate from '@/components/WalletGate';
 import { WalletMultiButton } from '@/components/WalletProviders';
@@ -12,7 +13,10 @@ import CoinSprite from '@/components/CoinSprite';
 import Num, { ev } from '@/components/Num';
 
 function Me() {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
+  const mode = useStore((s) => s.mode);
+  const config = useStore((s) => s.config);
+  const [claiming, setClaiming] = useState(false);
   const { setVisible } = useWalletModal();
   const { world, version, ready } = useWorld();
   const [demo, setDemo] = useState<string | null>(null);
@@ -91,18 +95,30 @@ function Me() {
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <button
-          disabled={claimable <= 0 || !publicKey}
+          disabled={claimable <= 0 || !publicKey || claiming}
           onClick={async () => {
+            setClaiming(true);
             try {
-              const amt = await useStore.getState().claim(wallet);
-              setToast(`Claimed ${fmtSol(amt)} SOL (simulated, no transaction sent).`);
-            } catch {
-              setToast('Claim failed. Try again.');
+              if (mode === 'local') {
+                const amt = await useStore.getState().claim(wallet);
+                setToast(`Claimed ${fmtSol(amt)} SOL (simulated, no transaction sent).`);
+              } else {
+                const r = await claimFlow(wallet, signMessage, !!config?.claimNeedsSignature);
+                setToast(
+                  r.amount > 0
+                    ? `Sent ${fmtSol(r.amount)} SOL to your wallet in ${r.signatures.length} transaction${r.signatures.length === 1 ? '' : 's'}.`
+                    : `Nothing above the ${fmtSol(config?.minClaim ?? 0)} SOL minimum per coin yet.`,
+                );
+              }
+            } catch (e) {
+              setToast(e instanceof Error ? e.message : 'Claim failed. Try again.');
+            } finally {
+              setClaiming(false);
             }
           }}
           className="px-btn text-[10px]"
         >
-          CLAIM {fmtSol(claimable)} SOL
+          {claiming ? 'CLAIMING…' : `CLAIM ${fmtSol(claimable)} SOL`}
         </button>
         {!publicKey && <span className="text-lg text-muted">connect the owning wallet to claim</span>}
         {toast && <span className="text-lg text-leaf">{toast}</span>}

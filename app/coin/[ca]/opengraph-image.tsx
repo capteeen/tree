@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { lineage } from '@/lib/sim';
-import { sim } from '@/lib/server/sim';
+import { hub } from '@/lib/server/engine';
 import { pixelFont } from '@/lib/ogFont';
 import { hashStr } from '@/lib/rng';
 
@@ -45,7 +45,7 @@ function PixelArrow() {
 }
 
 export default async function Image({ params }: { params: { ca: string } }) {
-  const w = sim().world;
+  const w = hub().world;
   const c = w.coins[params.ca];
   const line = c ? lineage(w, c.ca) : [];
   const ticker = c?.ticker ?? 'TREE';

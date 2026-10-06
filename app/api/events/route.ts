@@ -1,4 +1,4 @@
-import { sim } from '@/lib/server/sim';
+import { hub } from '@/lib/server/engine';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,7 @@ export function GET(req: Request) {
         }
       };
       send(`retry: 2000\n\n`);
-      off = sim().subscribe((msg) => send(`data: ${JSON.stringify(msg)}\n\n`));
+      off = hub().subscribe((msg) => send(`data: ${JSON.stringify(msg)}\n\n`));
       ping = setInterval(() => send(`: ping\n\n`), 15000);
       req.signal.addEventListener('abort', () => {
         off();

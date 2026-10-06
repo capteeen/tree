@@ -5,6 +5,7 @@ import { emit } from './bus';
 import { liveRng } from './rng';
 import { SEASONS, seasonOf, type Season } from './season';
 import { setMuted as setSoundMuted } from './sound';
+import type { PublicConfig } from './server/engine';
 import {
   LIVE_DEATH_INACTIVITY,
   LIVE_LIMITS,
@@ -41,6 +42,8 @@ interface State {
   ready: boolean;
   mode: Mode;
   connected: boolean;
+  /** Server config (launch cost, reserve, chain mode). null in local mode. */
+  config: PublicConfig | null;
   world: World;
   /** Chronological, oldest first. */
   events: TreeEvent[];
@@ -53,6 +56,7 @@ interface State {
   reap(): void;
   plant(input: PlantInput): Promise<Ca>;
   claim(wallet: string): Promise<number>;
+  waitForCoin(ca: Ca, ms?: number): Promise<void>;
   reset(): void;
   setTheme(t: 'dark' | 'light'): void;
   setMuted(m: boolean): void;
@@ -166,6 +170,7 @@ export const useStore = create<State>()((set, get) => {
     ready: false,
     mode: 'server',
     connected: false,
+    config: null,
     world: { coins: {}, roots: [], trees: {}, stats: { trees: 0, coins: 0, aliveCoins: 0, deepest: 0, solClimbed: 0 }, seq: 0 },
     events: [],
     version: 0,
@@ -190,6 +195,10 @@ export const useStore = create<State>()((set, get) => {
           const snap = await r.json();
           set({ world: snap.world, events: snap.events, ready: true, mode: 'server', version: 1 });
           connect();
+          fetch('/api/config', { cache: 'no-store' })
+            .then((c) => (c.ok ? c.json() : null))
+            .then((config) => config && set({ config }))
+            .catch(() => {});
         } catch {
           startLocal();
         }
@@ -217,32 +226,25 @@ export const useStore = create<State>()((set, get) => {
       commit(kill(world, victim.ca, now));
     },
 
+    /** Local mode only. Server modes plant through lib/client/api plantFlow (it needs the wallet). */
     async plant(input) {
-      if (get().mode === 'server') {
-        const r = await fetch('/api/plant', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? 'launch failed');
-        const { ca } = await r.json();
-        // the sprout arrives on the stream; wait briefly so the tree page finds it
-        for (let i = 0; i < 20 && !get().world.coins[ca]; i++) await new Promise((res) => setTimeout(res, 100));
-        if (!get().world.coins[ca]) resync();
-        return ca;
-      }
-      // TODO(phase2): launch on pump.fun via PumpPortal and wait for the mint (see lib/phase2/pumpportal.ts).
       const evs = plantRoot(get().world, liveRng, input, Date.now());
       commit(evs);
       return evs[0].coinCa;
     },
 
+    /** Local mode only; see lib/client/api claimFlow. */
     async claim(wallet) {
-      if (get().mode === 'server') {
-        const r = await fetch('/api/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet }) });
-        if (!r.ok) throw new Error('claim failed');
-        return (await r.json()).amount as number;
-      }
-      // TODO(phase2): build + sign a claim transaction from each owned coin's vault.
       const evs = simClaim(get().world, wallet, Date.now());
       commit(evs);
       return evs.reduce((n, e) => n + (e.amount ?? 0), 0);
+    },
+
+    /** Wait until a coin shows up in the streamed world (after a launch). */
+    async waitForCoin(ca: Ca, ms = 8000) {
+      const t = Date.now();
+      while (!get().world.coins[ca] && Date.now() - t < ms) await new Promise((r) => setTimeout(r, 150));
+      if (!get().world.coins[ca]) resync();
     },
 
     reset() {

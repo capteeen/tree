@@ -1,4 +1,4 @@
-import { sim } from '@/lib/server/sim';
+import { hub } from '@/lib/server/engine';
 import { ogResponse, PixelArrow, TreePicture } from '@/lib/server/og';
 import { fmtSol } from '@/lib/format';
 
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /** OG card for one event: the climb path drawn on its tree. */
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get('id') ?? '';
-  const s = sim();
+  const s = hub();
   const e = s.events.find((x) => x.id === id);
   const world = s.world;
   if (!e) return ogResponse(<div style={{ margin: 'auto', fontSize: 28, display: 'flex' }}>TREE</div>);

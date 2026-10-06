@@ -12,7 +12,7 @@ import { childName, rootName } from './names';
 import { fakeCa, fakeWallet, int, mulberry32, range, type Rng } from './rng';
 
 export const SEED = 0x7ee5eed;
-/** Approximate pump.fun launch cost (SOL). TODO(phase2): read live from PumpPortal. */
+/** Approximate pump.fun launch cost (SOL): rent for the mint, bonding curve and metadata. Live mode: LAUNCH_COST_SOL. */
 export const LAUNCH_COST = 0.02;
 /** Kept in a vault after launch for transfers / rent. */
 export const ROOT_RESERVE = 0.03;

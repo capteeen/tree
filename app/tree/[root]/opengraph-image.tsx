@@ -1,4 +1,4 @@
-import { sim } from '@/lib/server/sim';
+import { hub } from '@/lib/server/engine';
 import { ogResponse, TreePicture } from '@/lib/server/og';
 import { fmtSol } from '@/lib/format';
 
@@ -12,7 +12,7 @@ const Row = ({ children }: { children: React.ReactNode }) => <div style={{ displ
 const C = ({ c, children }: { c: string; children: React.ReactNode }) => <div style={{ display: 'flex', color: c, marginRight: 10, whiteSpace: 'nowrap', lineHeight: 1.7 }}>{children}</div>;
 
 export default async function Image({ params }: { params: { root: string } }) {
-  const { world } = sim();
+  const { world } = hub();
   const root = world.coins[params.root];
   const tree = world.trees[params.root];
   if (!root || !tree) return ogResponse(<div style={{ margin: 'auto', fontSize: 28, display: 'flex' }}>TREE</div>);

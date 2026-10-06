@@ -11,13 +11,16 @@ const COLORS: Record<TreeEvent['kind'], string> = {
   trade: 'text-leaf',
   claim: 'text-leaf',
   revive: 'text-[#9fd8c8]',
+  swap: 'text-muted',
 };
 
 /** Live feed of real simulator events. The newest one slides in. */
 export default function Ticker() {
   const events = useStore((s) => s.events);
   const ready = useStore((s) => s.ready);
-  const recent = events.slice(-4).reverse();
+  // market swaps are too frequent for the ticker; it shows what the tree did
+  const recent: TreeEvent[] = [];
+  for (let i = events.length - 1; i >= 0 && recent.length < 4; i--) if (events[i].kind !== 'swap') recent.push(events[i]);
   return (
     <div className="border-y-4 border-[var(--line)] bg-panel2">
       <div className="mx-auto flex max-w-7xl items-center gap-3 overflow-hidden px-3 py-1.5">
